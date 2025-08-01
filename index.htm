@@ -4,395 +4,531 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HACKERPUNK - 🚀 Dystopian Parkour Adventure Game</title>
-    <meta name="description" content="Join HACKERPUNK, a thrilling parkour and hacking adventure in a neon-lit dystopian city. Explore features like multiplayer races, hacking puzzles, and more!">
-    <meta name="keywords" content="HACKERPUNK, parkour game, hacking game, multiplayer racing, indie game, neon-lit city, cyberpunk, VR">
+    <title>HACKERPUNK - Dystopian Parkour & Hacking Adventure</title>
+    <meta name="description" content="Enter the neon-drenched, dystopian world of HACKERPUNK. A thrilling VR adventure featuring advanced parkour, complex hacking, and multiplayer mayhem.">
+    <meta name="keywords" content="HACKERPUNK, parkour game, hacking game, VR game, multiplayer racing, indie game, neon-lit city, cyberpunk, dystopian, Trent Sterling, Tront">
     <meta name="author" content="Trent Sterling">
+
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="HACKERPUNK - Dystopian Parkour & Hacking Adventure">
+    <meta property="og:description" content="Rip through the neon grid, bend reality, and own the system in this high-octane VR experience.">
+    <meta property="og:image" content="https://hackerpunk.s3.amazonaws.com/website/ss_city_1.png">
+    <meta property="og:url" content="https://punk.tront.xyz">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Favicon -->
+    <link rel="icon" href="https://blog.tront.xyz/assets/img/tront.png" type="image/png">
+
+    <!-- Font Imports -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Special+Elite&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;700&family=Inter:wght@400;500;700&family=VT323&family=Special+Elite&display=swap" rel="stylesheet">
+
     <style>
+        /* --- CSS VARIABLES & BASE STYLES --- */
         :root {
-            --color-bg: #05050a; 
-            --color-bg-secondary: #100514; 
-            --color-text: #00dd00; 
-            --color-primary-neon: #ff00ff; 
-            --color-secondary-neon: #00ffff; 
-            --color-accent-neon: #ffff00; 
-            --font-heading: 'VT323', monospace; 
-            --font-subheading: 'Special Elite', cursive; 
-            --font-body: 'Share Tech Mono', monospace; 
+            --color-bg: #05050a;
+            --color-bg-secondary: #100514;
+            --color-text: #00dd00;
+            --color-text-muted: #b0b0b0;
+            --color-primary-neon: #ff00ff;
+            --color-secondary-neon: #00ffff;
+            --color-accent-neon: #ffff00;
+            --font-display: 'VT323', monospace;
+            --font-heading: 'Special Elite', cursive;
+            --font-body: 'Fira Code', monospace;
+            --color-primary-neon-rgb: 255, 0, 255;
+            --color-secondary-neon-rgb: 0, 255, 255;
+            --color-accent-neon-rgb: 255, 255, 0;
         }
 
-        html {
-            font-size: 16px; 
-        }
-
-        * {
+        *, *::before, *::after {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
         }
 
         body {
             font-family: var(--font-body);
             background-color: var(--color-bg);
             color: var(--color-text);
-            line-height: 1.5; 
+            line-height: 1.6;
             overflow-x: hidden;
+            /* FOUC Prevention: Initially hidden */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.6s ease-in-out;
+        }
+
+        /* FOUC Prevention: Reveal when fonts are loaded */
+        body.fonts-loaded {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        /* --- DYNAMIC AMBIANCE --- */
+        #particle-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: -2; overflow: hidden;
+        }
+
+        @keyframes fall {
+            from { transform: translateY(-20vh) rotate(-45deg); opacity: 0; }
+            10% { opacity: 0.3; }
+            90% { opacity: 0.15; }
+            to { transform: translateY(120vh) rotate(45deg); opacity: 0; }
+        }
+        
+        .particle {
+            position: absolute; font-family: var(--font-display);
+            color: var(--color-primary-neon);
+            opacity: 0;
+            animation: fall linear infinite;
+        }
+        
+        .particle:nth-child(1){left:5%;animation-duration:10s;animation-delay:-3s;font-size:2.2rem;color:var(--color-secondary-neon)}
+        .particle:nth-child(2){left:10%;animation-duration:7s;animation-delay:-1s;font-size:1.8rem}
+        .particle:nth-child(3){left:15%;animation-duration:14s;animation-delay:-5s;font-size:2.5rem;color:var(--color-accent-neon)}
+        .particle:nth-child(4){left:20%;animation-duration:9s;animation-delay:-12s;font-size:1.9rem}
+        .particle:nth-child(5){left:25%;animation-duration:17s;animation-delay:-2s;font-size:2.3rem;color:var(--color-secondary-neon)}
+        .particle:nth-child(6){left:30%;animation-duration:8s;animation-delay:-8s;font-size:1.8rem}
+        .particle:nth-child(7){left:35%;animation-duration:12s;animation-delay:-4s;font-size:2.6rem}
+        .particle:nth-child(8){left:40%;animation-duration:10s;animation-delay:-10s;font-size:2rem;color:var(--color-accent-neon)}
+        .particle:nth-child(9){left:45%;animation-duration:15s;animation-delay:0s;font-size:2.4rem}
+        .particle:nth-child(10){left:50%;animation-duration:8s;animation-delay:-9s;font-size:1.7rem;color:var(--color-secondary-neon)}
+        .particle:nth-child(11){left:55%;animation-duration:11s;animation-delay:-11s;font-size:2.1rem;color:var(--color-accent-neon)}
+        .particle:nth-child(12){left:60%;animation-duration:9s;animation-delay:-6s;font-size:1.9rem}
+        .particle:nth-child(13){left:65%;animation-duration:16s;animation-delay:-1s;font-size:2.7rem}
+        .particle:nth-child(14){left:70%;animation-duration:8s;animation-delay:-7s;font-size:1.8rem;color:var(--color-secondary-neon)}
+        .particle:nth-child(15){left:75%;animation-duration:13s;animation-delay:-3s;font-size:2.2rem}
+        .particle:nth-child(16){left:80%;animation-duration:10s;animation-delay:-9s;font-size:2rem;color:var(--color-accent-neon)}
+        .particle:nth-child(17){left:85%;animation-duration:15s;animation-delay:-5s;font-size:2.5rem}
+        .particle:nth-child(18){left:90%;animation-duration:7s;animation-delay:-13s;font-size:1.9rem}
+        .particle:nth-child(19){left:95%;animation-duration:12s;animation-delay:-2s;font-size:2.3rem;color:var(--color-secondary-neon)}
+        .particle:nth-child(20){left:2%;animation-duration:18s;animation-delay:-8s;font-size:2.8rem}
+
+        body::before {
+            content: '';
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-image:
-                repeating-linear-gradient(60deg, rgba(var(--color-primary-neon-rgb, 255,0,255),0.025) 0px, rgba(var(--color-primary-neon-rgb, 255,0,255),0.025) 1px, transparent 1px, transparent 12px),
-                repeating-linear-gradient(-60deg, rgba(var(--color-secondary-neon-rgb, 0,255,255),0.025) 0px, rgba(var(--color-secondary-neon-rgb, 0,255,255),0.025) 1px, transparent 1px, transparent 12px),
-                linear-gradient(to bottom, rgba(0,0,8,0.96), rgba(8,0,20,0.93), rgba(0,20,8,0.96));
-            animation: enhancedBgShift 45s linear infinite alternate, enhancedBgFlicker 0.25s infinite;
+                repeating-linear-gradient(var(--color-bg) 0, var(--color-bg) 28px, rgba(var(--color-secondary-neon-rgb), 0.5) 29px, var(--color-bg) 30px),
+                repeating-linear-gradient(90deg, var(--color-bg) 0, var(--color-bg) 28px, rgba(var(--color-primary-neon-rgb), 0.5) 29px, var(--color-bg) 30px);
+            opacity: 0.04;
+            z-index: -1;
+            animation: animated-grid 20s linear infinite;
         }
 
-        @keyframes enhancedBgShift {
-            0% { background-color: #0a0a10; filter: hue-rotate(-3deg) contrast(100%); }
-            25% { background-color: #1a0020; filter: hue-rotate(20deg) contrast(103%); }
-            50% { background-color: #001a05; filter: hue-rotate(-20deg) contrast(100%); }
-            75% { background-color: #1a1a00; filter: hue-rotate(35deg) contrast(108%); }
-            100% { background-color: #0a0a10; filter: hue-rotate(-3deg) contrast(100%); }
-        }
-        @keyframes enhancedBgFlicker { 
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.97; }
+        @keyframes animated-grid { from { background-position: 0 0; } to { background-position: 60px 60px; } }
+
+        /* --- NAVBAR (HACKERPUNK THEME) --- */
+        @keyframes spin-once { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        #magic-navbar-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 60px; z-index: 9999;
+            display: flex; flex-direction: row-reverse; /* <-- THE CSS HACK */
+            justify-content: center; align-items: center;
+            gap: 1rem; background-color: rgba(10, 5, 20, 0.65);
+            backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            border-bottom: 1px solid rgba(var(--color-primary-neon-rgb), 0.4);
+            padding: 0 1rem; perspective: 1000px;
         }
 
+        .nav-link {
+            position: relative; display: flex; align-items: center;
+            height: 40px; padding: 0 1.25rem;
+            color: var(--color-text-muted); text-decoration: none;
+            font-size: 0.95rem; font-weight: 600; font-family: 'Inter', sans-serif;
+            border-radius: 10px; background-color: rgba(40, 40, 45, 0.5);
+            border: 1px solid rgba(var(--color-secondary-neon-rgb), 0.3);
+            will-change: transform, box-shadow; transform-style: preserve-3d;
+            transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+            overflow: hidden;
+        }
+
+        .nav-link:hover {
+            color: #ffffff; background-color: rgba(var(--color-secondary-neon-rgb), 0.15);
+            border-color: rgba(var(--color-secondary-neon-rgb), 0.6);
+            transform: perspective(1000px) rotateX(8deg) translateY(-3px);
+            box-shadow: 0px 8px 25px rgba(0, 0, 0, 0.4), 0 0 18px -5px rgba(var(--color-secondary-neon-rgb), 0.7);
+        }
+        
+        .logo-image { height: 30px; width: 30px; border-radius: 50%; margin-right: 0.75rem; border: 2px solid rgba(255, 255, 255, 0.2); transition: transform .8s cubic-bezier(.16,1,.3,1); }
+        .nav-link.home-link { padding-left: 0.5rem; }
+        
+        .nav-link:hover ~ .home-link .logo-image,
+        .home-link:hover .logo-image { animation: spin-once 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        .nav-link.active {
+            color: var(--color-primary-neon);
+            font-weight: bold;
+            background-color: rgba(var(--color-primary-neon-rgb), 0.1);
+            border-color: var(--color-primary-neon);
+            transform: perspective(1000px) rotateX(8deg) translateY(-3px);
+            box-shadow: 0px 5px 15px rgba(0, 0, 0, 0.3), 0 0 10px -5px rgba(var(--color-primary-neon-rgb), 0.6);
+        }
+
+        /* --- HEADER --- */
         header {
             text-align: center;
-            padding: 30px 10px 15px 10px; /* Significantly reduced top/bottom padding */
-            background: linear-gradient(145deg, rgba(255, 0, 153, 0.3), rgba(20, 5, 30, 0.55)),
-                        radial-gradient(ellipse at top center, rgba(10, 2, 15, 0.85) 0%, rgba(5, 1, 8, 1) 75%);
-            box-shadow: 0 0 30px rgba(var(--color-primary-neon-rgb, 255,0,255), 0.5), 
-                        0 0 18px rgba(var(--color-secondary-neon-rgb, 0,255,255), 0.4),
-                        inset 0 -5px 15px rgba(0,0,0,0.3); 
-            border-bottom: 3px groove var(--color-primary-neon); 
-            position: relative;
-            overflow: hidden;
-            transform: skewY(-0.5deg); /* Reduced skew */
-            margin-bottom: 0; /* Remove bottom margin from header */
-        }
-        
-        header::before { 
-            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-image: repeating-linear-gradient( transparent, transparent 1px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 3px );
-            animation: scanlines 15s linear infinite alternate; 
-            pointer-events: none; z-index: 1; opacity: 0.7;
+            padding: 140px 20px 80px;
+            background: linear-gradient(145deg, rgba(var(--color-primary-neon-rgb), 0.15), rgba(16, 5, 20, 0.4)),
+                        radial-gradient(ellipse at top center, rgba(10, 2, 15, 0.6), rgba(5, 1, 8, 0.7) 85%);
+            border-bottom: 3px groove var(--color-primary-neon);
+            position: relative; overflow: hidden;
+            transform: skewY(-1.5deg); margin-top: -60px;
+            z-index: 1;
         }
 
-        @keyframes scanlines {
-            0% { background-position: 0 0; opacity: 0.7; }
-            50% { background-position: 0 50px; opacity: 0.5; }
-            100% { background-position: 0 100px; opacity: 0.7; }
+        header::after {
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: repeating-linear-gradient(transparent, transparent 2px, rgba(0,0,0,0.15) 3px, rgba(0,0,0,0.15) 4px);
+            animation: scanlines 20s linear infinite alternate;
+            opacity: 0.5; pointer-events: none; z-index: 1;
         }
+        @keyframes scanlines { from { background-position: 0 0; } to { background-position: 0 100px; } }
 
         header h1 {
-            font-family: var(--font-heading);
-            font-size: 7vw; 
-            max-font-size: 5.5rem; 
-            min-font-size: 2.8rem; 
-            letter-spacing: 1px; 
+            font-family: var(--font-display);
+            font-size: clamp(4rem, 15vw, 8rem);
             color: var(--color-primary-neon);
-            text-shadow: 
-                0 0 5px var(--color-primary-neon), 0 0 10px var(--color-primary-neon), 0 0 20px var(--color-primary-neon),
-                0 0 35px var(--color-accent-neon), 
-                0 0 60px #ff007f,  0 0 80px #ff007f;
-            animation: textFlickerIntense 2.5s infinite alternate, glitchTitleHarder 4s infinite steps(3, end) alternate;
-            position: relative; z-index: 2; margin-bottom: 5px; 
-            transform: skewX(-4deg); /* Slightly reduced skew */
+            text-shadow: 0 0 4px var(--color-accent-neon), 0 0 10px var(--color-primary-neon), 0 0 20px var(--color-primary-neon);
+            animation: text-flicker 4s infinite alternate;
+            margin-bottom: 1rem;
+            transform: skewX(-6deg);
         }
         
-        @keyframes textFlickerIntense { 
-            0%, 15%, 20%, 28%, 50%, 58%, 100% {
-                text-shadow: 0 0 5px var(--color-primary-neon), 0 0 12px var(--color-primary-neon), 0 0 22px #ff007f, 0 0 40px var(--color-accent-neon), 0 0 75px #ff007f;
-                opacity: 1; filter: brightness(1.1);
-            }
-            18%, 25%, 55% { text-shadow: 0 0 2px var(--color-primary-neon); opacity: 0.7; filter: brightness(0.9); }
+        @keyframes text-flicker {
+            0%, 100% { text-shadow: 0 0 4px var(--color-accent-neon), 0 0 10px var(--color-primary-neon), 0 0 20px var(--color-primary-neon); opacity: 1; }
+            50% { text-shadow: 0 0 4px var(--color-accent-neon), 0 0 8px var(--color-primary-neon); opacity: 0.9; }
         }
-
-        @keyframes glitchTitleHarder { 
-            0% { transform: skewX(-4deg) translateX(0); } 
-            10% { text-shadow: 2px 2px var(--color-secondary-neon), -2px -2px var(--color-accent-neon); transform: skewX(-7deg) translateX(-4px) translateY(1px); }
-            20% { transform: skewX(-1deg) translateX(2px) translateY(-1px); } 
-            100% { transform: skewX(-4deg) translateX(0); }
-        }
-
+        
         header p {
-            font-family: var(--font-subheading); 
-            font-size: 1.1rem; /* Slightly smaller */
-            margin: 8px auto; /* Reduced margin */
-            max-width: 600px;
-            color: var(--color-accent-neon); 
-            text-shadow: 1px 1px 0px var(--color-bg), 0 0 5px rgba(var(--color-accent-neon-rgb), 0.5);
-            z-index: 2; position: relative;
+            font-family: var(--font-heading);
+            font-size: clamp(1.1rem, 3vw, 1.3rem);
+            max-width: 60ch; margin: 0 auto 2.5rem auto;
+            color: var(--color-accent-neon);
+            text-shadow: 1px 1px 2px var(--color-bg), 0 0 5px rgba(var(--color-accent-neon-rgb), 0.7);
         }
 
         .cta-button {
             display: inline-block;
-            padding: 10px 25px; 
-            font-family: var(--font-heading);
-            font-size: 1.5rem; /* Slightly smaller */
-            color: var(--color-bg);
-            background: linear-gradient(45deg, var(--color-primary-neon), var(--color-secondary-neon)); 
-            border: 2px solid var(--color-accent-neon); 
-            border-radius: 3px; 
-            text-decoration: none;
-            transition: all 0.2s ease-in-out;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
-            box-shadow: 0 0 10px var(--color-accent-neon), inset 0 0 5px rgba(255,255,255,0.4);
-            margin-top: 8px; /* Reduced margin */
-            z-index: 2; position: relative;
-            transform: perspective(300px) rotateX(8deg); /* Reduced 3D effect */
+            padding: 10px 25px;
+            font-family: var(--font-display);
+            font-size: clamp(1.5rem, 4vw, 1.8rem);
+            color: var(--color-bg); background: linear-gradient(45deg, var(--color-primary-neon), var(--color-secondary-neon));
+            border: 2px solid var(--color-accent-neon); border-radius: 3px;
+            text-decoration: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+            box-shadow: 0 0 15px var(--color-accent-neon), inset 0 0 8px rgba(255,255,255,0.5);
+            transform: skewX(-6deg); transition: all 0.2s ease-in-out;
         }
 
-        .cta-button:hover, .cta-button:focus { 
-            background: linear-gradient(45deg, var(--color-secondary-neon), var(--color-primary-neon));
-            color: #000; border-color: #fff;
-            transform: perspective(300px) rotateX(3deg) scale(1.07) skewX(-2deg); /* Adjusted hover */
-            box-shadow: 0 0 20px var(--color-accent-neon), 0 0 35px var(--color-primary-neon), inset 0 0 8px rgba(0,0,0,0.2);
-        }
-
-        .video-showcase-section {
-            padding: 20px 10px; 
-            background-color: var(--color-bg-secondary);
-            border-top: 2px dashed var(--color-secondary-neon); 
-            border-bottom: 2px dashed var(--color-secondary-neon);
-            text-align: center;
-            margin: 0; /* Remove top/bottom margin to bring closer to header/features */
-        }
-
-        .video-showcase-section h2 {
-            font-family: var(--font-subheading); 
-            font-size: 2rem; /* Slightly smaller */
-            color: var(--color-secondary-neon);
-            text-shadow: 1px 1px var(--color-primary-neon), -1px -1px var(--color-bg), 0 0 8px var(--color-secondary-neon); 
-            margin-bottom: 12px; /* Reduced margin */
-            transform: skewX(-2deg); 
+        .cta-button:hover, .cta-button:focus {
+            transform: scale(1.05) skewX(-6deg);
+            box-shadow: 0 0 25px var(--color-accent-neon), 0 0 40px var(--color-primary-neon), inset 0 0 10px rgba(0,0,0,0.3);
+            color: #000;
         }
         
-        .video-showcase-section iframe {
-            display: block; 
-            margin: 0 auto; 
-            max-width: 100%; 
-            border: 3px groove var(--color-secondary-neon); 
-            box-shadow: 0 0 15px var(--color-secondary-neon), 0 0 25px rgba(var(--color-secondary-neon-rgb, 0,255,255), 0.5), inset 0 0 8px rgba(0,0,0,0.4);
-            border-radius: 3px;
-            transform: rotate(-0.3deg); /* Reduced rotation */
-        }
-
-        section#features {
-            padding: 25px 10px; /* Reduced padding */
-            background-color: var(--color-bg-secondary); 
-            text-align: center;
-            border-bottom: 3px groove var(--color-primary-neon); 
-            margin-top: 0; /* Remove top margin */
-        }
-
-        section#features h2 { 
-            font-family: var(--font-subheading); 
-            margin-bottom: 15px; /* Reduced margin */
-            font-size: 2.6rem; /* Slightly smaller */
-            color: var(--color-primary-neon);
-            text-shadow: 1px 1px var(--color-secondary-neon), -1px -1px var(--color-bg), 0 0 10px var(--color-primary-neon);
-            transform: skewX(-2deg);
-        }
-
-        .description {
-            margin: 12px auto; /* Reduced margin */
-            font-size: 1rem; 
-            line-height: 1.6;
-            max-width: 700px; 
-            color: #b0b0b0;
-            text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
-        }
-        .description strong {
-            color: var(--color-accent-neon);
-            font-weight: normal; 
-            text-shadow: 0 0 5px var(--color-accent-neon);
-        }
-
-        .feature-list {
-            list-style-type: none;
-            padding: 0;
-            max-width: 750px; 
-            margin: 15px auto 0 auto; /* Reduced margin */
-        }
-
-        .feature-list li {
-            margin: 18px 0; /* Reduced margin */
-            padding: 10px; /* Reduced padding */
-            font-size: 1.05rem; /* Slightly smaller */
-            background-color: rgba(var(--color-primary-neon-rgb, 255,0,255), 0.03);
-            border: 1px dashed var(--color-primary-neon);
-            border-radius: 3px;
-            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s;
-            box-shadow: 0 0 3px rgba(var(--color-primary-neon-rgb, 255,0,255), 0.1);
+        /* --- GENERIC SECTION STYLES --- */
+        .content-section {
+            padding: 4rem 1rem;
+            border-top: 2px dashed var(--color-secondary-neon);
             position: relative;
-            color: #00bb00; 
+            z-index: 1;
         }
         
-        .feature-list li::before { 
-            content: "EXECUTE::"; 
-            position: absolute; left: -15px; top: 50%; transform: translateY(-50%) rotate(-90deg); 
-            font-size: 0.6em; color: var(--color-secondary-neon); opacity: 0;
-            transition: opacity 0.3s, left 0.3s; pointer-events: none;
+        .content-section > h2 {
             font-family: var(--font-heading);
+            font-size: clamp(2.5rem, 6vw, 3.5rem);
+            text-align: center;
+            margin-bottom: 1.5rem;
+            word-wrap: break-word; /* Helps with long text like gameplay stream */
+        }
+        
+        .section-description {
+            margin: 0 auto 3rem auto; font-size: 1.1rem;
+            line-height: 1.7; max-width: 75ch;
+            color: var(--color-text-muted); text-align: center;
+        }
+        .section-description strong {
+            color: var(--color-accent-neon); font-weight: bold;
         }
 
-        .feature-list li:hover { 
-            transform: scale(1.02) rotate(0.3deg); 
-            background-color: rgba(var(--color-secondary-neon-rgb, 0,255,255), 0.06);
+        /* --- VIDEO SHOWCASE --- */
+        .video-showcase {
+            background-color: var(--color-bg-secondary);
+        }
+        .video-showcase h2 {
+            color: var(--color-secondary-neon);
+            text-shadow: 0 0 10px var(--color-secondary-neon), 1px 1px 0 var(--color-primary-neon);
+        }
+        .video-container {
+            max-width: 1200px; margin: 0 auto;
+            border: 3px groove var(--color-secondary-neon);
+            box-shadow: 0 0 25px rgba(var(--color-secondary-neon-rgb), 0.5), 0 0 45px rgba(var(--color-secondary-neon-rgb), 0.3);
+            border-radius: 5px; background-color: #000;
+        }
+        .video-container iframe {
+            display: block; width: 100%; aspect-ratio: 16 / 9; border: none;
+        }
+        
+        /* --- FEATURES SECTION --- */
+        #features {
+            background: transparent;
+        }
+        #features h2 {
+             color: var(--color-primary-neon);
+             text-shadow: 0 0 12px var(--color-primary-neon), -1px -1px 0 var(--color-secondary-neon);
+        }
+        .feature-list {
+            list-style: none; max-width: 1200px;
+            margin: 0 auto; display: grid; gap: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+        .feature-card {
+            background-color: rgba(var(--color-primary-neon-rgb), 0.07);
+            backdrop-filter: blur(5px);
+            border: 1px dashed var(--color-primary-neon);
+            border-left: 4px solid var(--color-accent-neon);
+            border-radius: 4px; padding: 1.5rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s;
+            display: flex; align-items: flex-start; gap: 1rem;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            background-color: rgba(var(--color-secondary-neon-rgb), 0.08);
             border-color: var(--color-secondary-neon);
-            box-shadow: 0 0 10px rgba(var(--color-secondary-neon-rgb, 0,255,255), 0.3), 0 0 18px rgba(var(--color-secondary-neon-rgb, 0,255,255), 0.2);
-            color: var(--color-text);
+            box-shadow: 0 0 15px rgba(var(--color-secondary-neon-rgb), 0.4);
         }
-        .feature-list li:hover::before { opacity: 0.8; left: -18px; } /* Adjusted left position */
-
-        .feature-list li strong {
+        .feature-emoji { font-size: 1.5rem; line-height: 1.2; margin-top: 0.2rem; }
+        .feature-text strong {
+            font-family: var(--font-display); font-size: 1.3rem;
             color: var(--color-accent-neon);
-            font-family: var(--font-heading); 
-            font-size: 1.05em; 
-            text-shadow: 0 0 3px var(--color-accent-neon);
+            text-shadow: 0 0 3px rgba(var(--color-accent-neon-rgb), 0.6);
+            display: block; margin-bottom: 0.5rem;
         }
+        .feature-text p { font-size: 0.95rem; color: var(--color-text-muted); }
+
+        /* --- PRIVACY & FOOTER --- */
+        .privacy-policy { background: var(--color-bg-secondary); }
+        .privacy-policy .container { max-width: 800px; margin: 0 auto; }
+        .privacy-policy h2 { color: var(--color-accent-neon); }
+        .privacy-policy h3 {
+            font-family: var(--font-heading); font-size: 1.6rem;
+            color: var(--color-primary-neon); margin: 2rem 0 0.5rem 0;
+        }
+        .privacy-policy p, .privacy-policy a { font-size: 1rem; color: var(--color-text-muted); }
+        .privacy-policy a { color: var(--color-secondary-neon); text-decoration: underline; }
+        .privacy-policy a:hover { color: var(--color-primary-neon); }
 
         footer {
             text-align: center;
-            padding: 15px 10px; /* Reduced padding */
-            background: var(--color-bg);
-            border-top: 2px solid var(--color-secondary-neon);
-            margin-top: 15px; /* Reduced margin */
+            padding: 2.5rem 1rem;
+            border-top: 1px solid var(--color-secondary-neon);
+            background: rgba(5, 5, 10, 0.5);
+            position: relative;
+            z-index: 1;
+        }
+        footer p { margin: 0.5rem 0; font-size: 1rem; color: #888; }
+        footer a { color: var(--color-secondary-neon); text-decoration: none; transition: color 0.2s; }
+        footer a:hover { color: var(--color-primary-neon); text-decoration: underline; }
+
+        /* --- RESPONSIVE ADJUSTMENTS --- */
+        @media (max-width: 768px) {
+            .content-section { padding: 3rem 1rem; }
+            .nav-link { padding: 0 1rem; }
+            #magic-navbar-container { gap: 0.5rem; }
         }
 
-        footer p {
-            margin: 4px 0; 
-            font-size: 0.8rem; /* Slightly smaller */
-            color: #888;
-        }
+        @media (max-width: 480px) {
+            .nav-link span { display: none; } /* Hides text on mobile */
+            .nav-link.home-link span { display: inline; } /* Keep "Home" text */
+            .logo-image { margin-right: 0; }
+            .nav-link.home-link { padding-left: 0.5rem; padding-right: 0.75rem; }
+            
+            .feature-list {
+                grid-template-columns: 1fr;
+            }
 
-        footer a {
-            color: var(--color-secondary-neon);
-            text-decoration: none;
-            transition: color 0.2s, text-shadow 0.2s;
-            text-shadow: 0 0 2px var(--color-secondary-neon);
-        }
+            .feature-card {
+                padding: 1.2rem;
+            }
 
-        footer a:hover {
-            color: var(--color-primary-neon);
-            text-shadow: 0 0 4px var(--color-primary-neon);
+            header p {
+                max-width: 90%;
+            }
         }
-
-        .privacy-policy {
-            background: var(--color-bg-secondary);
-            padding: 20px 10px; /* Reduced padding */
-            margin-top: 0; 
-            border-top: 1px dashed var(--color-primary-neon);
-            text-align: left;
-            max-width: 700px; 
-            margin-left: auto;
-            margin-right: auto;
-        }
-        .privacy-policy h2 {
-            font-family: var(--font-subheading);
-            font-size: 1.8rem; /* Slightly smaller */
-            color: var(--color-accent-neon);
-            text-shadow: 1px 1px var(--color-primary-neon), -1px -1px var(--color-bg);
-            margin-bottom: 12px; /* Reduced margin */
-            text-align: center;
-            transform: skewX(-1deg); /* Reduced skew */
-        }
-        .privacy-policy h3 {
-            font-family: var(--font-subheading);
-            font-size: 1.1rem; /* Slightly smaller */
-            color: var(--color-primary-neon);
-            margin-top: 10px; /* Reduced margin */
-            margin-bottom: 5px; /* Reduced margin */
-            text-shadow: 1px 1px var(--color-bg);
-        }
-         .privacy-policy p {
-            font-size: 0.85rem; /* Slightly smaller */
-            color: #909090;
-            margin-bottom: 0.6rem; /* Reduced margin */
-            line-height: 1.5;
-         }
-         .privacy-policy a {
-            color: var(--color-secondary-neon);
-         }
-         .privacy-policy a:hover {
-            color: var(--color-primary-neon);
-         }
-
-         body { 
-            --color-primary-neon-rgb: 255,0,255;
-            --color-secondary-neon-rgb: 0,255,255;
-            --color-accent-neon-rgb: 204,255,0; 
-         }
 
     </style>
 </head>
 <body>
+
+    <div id="particle-container">
+        <div class="particle">SYS</div><div class="particle">_</div><div class="particle">0_o</div><div class="particle">1</div><div class="particle">x_x</div>
+        <div class="particle">RUN</div><div class="particle">#</div><div class="particle">></div><div class="particle">!</div><div class="particle">..</div>
+        <div class="particle">ERR</div><div class="particle">HCK</div><div class="particle">0_0</div><div class="particle">/</div><div class="particle">^^</div>
+        <div class="particle">SYS</div><div class="particle">()</div><div class="particle">???</div><div class="particle">|</div><div class="particle">//</div>
+    </div>
+
+    <nav id="magic-navbar-container">
+        <!-- Elements are in REVERSE order for the CSS hover hack -->
+        <a href="https://tront.xyz/discord/" class="nav-link" target="_blank"><span>Discord</span></a>
+        <a href="https://blog.tront.xyz/" class="nav-link" target="_blank"><span>Blog</span></a>
+        <a href="https://tront.xyz/grid/" class="nav-link" target="_blank"><span>Grid</span></a>
+        <a href="#" class="nav-link active"><span>HackerPunk</span></a>
+        <a href="https://tront.xyz/" class="nav-link home-link" target="_blank">
+            <img src="https://blog.tront.xyz/assets/img/tront.png" alt="Tront Logo" class="logo-image">
+            <span>Home</span>
+        </a>
+    </nav>
+
     <header>
         <h1>HACKERPUNK</h1>
         <p>Welcome to a dystopian future where you are the ultimate hacker and parkour expert! 🌌 Rip through the neon grid, bend reality, and own the system.</p>
-        <a href="#features" class="cta-button">🚀 Explore the Game</a>
+        <a href="#features" class="cta-button">Explore the Game</a>
     </header>
 
-    <section class="video-showcase-section">
-        <h2>// GAMEPLAY_STREAM //</h2>
-        <iframe 
-            width="854" height="480" 
-            src="https://www.youtube.com/embed/k1BcMzdztUM" 
-            title="HACKERPUNK Gameplay Showcase" 
-            frameborder="0" 
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-            allowfullscreen>
-        </iframe>
-    </section>
+    <main>
+        <section class="content-section video-showcase">
+            <h2>// GAMEPLAY_STREAM //</h2>
+            <div class="video-container">
+                <iframe
+                    src="https://www.youtube.com/embed/k1BcMzdztUM"
+                    title="HACKERPUNK Gameplay Showcase"
+                    frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowfullscreen>
+                </iframe>
+            </div>
+        </section>
 
-    <section id="features">
-        <h2>🌟 Game Features</h2>
-        <div class="description">
-            <p>Set in a sprawling, neon-lit city dominated by corrupt corporations and overseen by hostile AI, <strong>HACKERPUNK</strong> immerses players in a thrilling world where agility and intellect are key to survival.</p>
-        </div>
-        <ul class="feature-list">
-            <li>🚀 <strong>Parkour Skills:</strong> Master the art of movement as you navigate rooftops and alleyways with incredible agility. Use advanced parkour techniques, jetpacks, and grapple hooks to traverse the urban jungle and reach otherwise inaccessible areas.</li>
-            <li>🔐 <strong>Hacking Puzzles:</strong> Put your mind to the test with intricate hacking challenges. Solve these puzzles to unlock doors, disable security systems, and earn valuable rewards that enhance your capabilities in the game.</li>
-            <li>🛡️ <strong>Combat Mechanics:</strong> Arm yourself with a diverse arsenal of weapons. Whether you choose stealth or brute force, you'll need to confront hostile AI, rival hackers, and corrupt corporate enforcers to claim your place in this dangerous world.</li>
-            <li>🎴 <strong>Collectible Trading Cards:</strong> Discover trading cards scattered throughout the city. Each card represents a unique personality and can be used to unlock powerful upgrades for your skills and abilities.</li>
-            <li>🏁 <strong>Multiplayer Parkour Races:</strong> Challenge friends and players worldwide in high-speed parkour races. Compete for the fastest times and climb the leaderboards to establish your reputation as the ultimate parkour master.</li>
-            <li>🗺️ <strong>Sandbox-Style Exploration:</strong> Experience freedom like never before! The open-world environment encourages players to explore, experiment, and discover hidden secrets that reward their curiosity.</li>
-            <li>⚙️ <strong>Impressive Physics Engine:</strong> Perform jaw-dropping stunts and maneuvers with a sophisticated physics engine that allows for realistic interactions and exhilarating gameplay.</li>
-            <li>💾 <strong>Comprehensive Save System:</strong> Enjoy a seamless save system that enables you to store your progress and keep your collected items safe in your personal safehouse.</li>
-            <li>👀 <strong>Realistic NPC Systems:</strong> Navigate a world filled with intelligent NPCs equipped with line of sight and audio detection systems. Stealth and strategy are essential as you avoid detection or confront these adversaries.</li>
-            <li>💰 <strong>Complex Economy:</strong> Engage with the city's economy by participating in various side activities, such as street cleaning and recycling, to earn money and invest in your growth.</li>
-        </ul>
-    </section>
+        <section id="features" class="content-section">
+            <h2>Game Features</h2>
+            <p class="section-description">Set in a sprawling, neon-lit city dominated by corrupt corporations and overseen by hostile AI, <strong>HACKERPUNK</strong> immerses players in a thrilling world where agility and intellect are key to survival.</p>
+            <ul class="feature-list">
+                <li class="feature-card">
+                    <span class="feature-emoji">🚀</span>
+                    <div class="feature-text">
+                        <strong>Parkour Skills:</strong>
+                        <p>Master the art of movement as you navigate rooftops and alleyways. Use advanced parkour techniques, jetpacks, and grapple hooks to traverse the urban jungle.</p>
+                    </div>
+                </li>
+                <li class="feature-card">
+                    <span class="feature-emoji">🔐</span>
+                    <div class="feature-text">
+                        <strong>Hacking Puzzles:</strong>
+                        <p>Put your mind to the test with intricate hacking challenges to unlock doors, disable security systems, and earn valuable rewards.</p>
+                    </div>
+                </li>
+                <li class="feature-card">
+                    <span class="feature-emoji">🛡️</span>
+                    <div class="feature-text">
+                        <strong>Combat Mechanics:</strong>
+                        <p>Arm yourself with a diverse arsenal. Confront hostile AI, rival hackers, and corrupt corporate enforcers to claim your place in this dangerous world.</p>
+                    </div>
+                </li>
+                <li class="feature-card">
+                    <span class="feature-emoji">🎴</span>
+                    <div class="feature-text">
+                        <strong>Collectible Trading Cards:</strong>
+                        <p>Discover trading cards scattered throughout the city. Each card can be used to unlock powerful upgrades for your skills and abilities.</p>
+                    </div>
+                </li>
+                <li class="feature-card">
+                    <span class="feature-emoji">🏁</span>
+                    <div class="feature-text">
+                        <strong>Multiplayer Parkour Races:</strong>
+                        <p>Challenge friends and players worldwide in high-speed parkour races. Compete for the fastest times and climb the leaderboards.</p>
+                    </div>
+                </li>
+                <li class="feature-card">
+                    <span class="feature-emoji">🗺️</span>
+                    <div class="feature-text">
+                        <strong>Sandbox-Style Exploration:</strong>
+                        <p>The open-world environment encourages players to explore, experiment, and discover hidden secrets that reward their curiosity.</p>
+                    </div>
+                </li>
+                <li class="feature-card">
+                    <span class="feature-emoji">⚙️</span>
+                    <div class="feature-text">
+                        <strong>Impressive Physics Engine:</strong>
+                        <p>Perform jaw-dropping stunts and maneuvers with a sophisticated physics engine that allows for realistic interactions and exhilarating gameplay.</p>
+                    </div>
+                </li>
+                <li class="feature-card">
+                    <span class="feature-emoji">💾</span>
+                    <div class="feature-text">
+                        <strong>Comprehensive Save System:</strong>
+                        <p>Enjoy a seamless save system that enables you to store your progress and keep your collected items safe in your personal safehouse.</p>
+                    </div>
+                </li>
+                <li class="feature-card">
+                    <span class="feature-emoji">👀</span>
+                    <div class="feature-text">
+                        <strong>Realistic NPC Systems:</strong>
+                        <p>Navigate a world filled with intelligent NPCs. Stealth and strategy are essential as you avoid detection or confront these adversaries.</p>
+                    </div>
+                </li>
+                <li class="feature-card">
+                    <span class="feature-emoji">💰</span>
+                    <div class="feature-text">
+                        <strong>Complex Economy:</strong>
+                        <p>Engage with the city's economy by participating in various side activities, such as street cleaning and recycling, to earn money.</p>
+                    </div>
+                </li>
+            </ul>
+        </section>
+
+        <section class="content-section privacy-policy">
+            <div class="container">
+                <h2>🔒 HACKERPUNK Privacy Policy</h2>
+                <p>Thank you for using HACKERPUNK, developed by Tront. We understand that your privacy is important to you, and we are committed to protecting it. This privacy policy explains what data we collect and how we use it.</p>
+                
+                <h3>Data Collection and Use</h3>
+                <p>HACKERPUNK does not collect any personal data from our game application on any platform. We do not collect any analytics or personal information. We do not use any collected data for marketing purposes.</p>
+                
+                <h3>Security</h3>
+                <p>The security of your personal data is of the utmost importance to us. While we make every effort to protect it, we cannot guarantee the absolute security of your data. HACKERPUNK does not leak any personal data.</p>
+                
+                <h3>Cookies</h3>
+                <p>Cookies are text files placed on your computer to collect standard Internet log information and visitor behavior information. You can set your browser not to accept cookies, or you can remove them from your browser by following the instructions at allaboutcookies.org. Please note that some features of our website may not function as a result.</p>
+                
+                <h3>Privacy Policies of Other Websites</h3>
+                <p>Our website may contain links to other websites. Please be aware that we are not responsible for the privacy practices of these other websites. We recommend that you read the privacy policies of each website that you visit.</p>
+                
+                <h3>Changes to Our Privacy Policy</h3>
+                <p>We review and update our privacy policy regularly. This privacy policy was last updated on May 17, 2025. If you have any questions or concerns about our privacy policy, please don't hesitate to contact us at trentsterling@gmail.com. We are always happy to help.</p>
+                
+                <p>© 2025 Tront. All rights reserved.</p>
+            </div>
+        </section>
+    </main>
 
     <footer>
-        <p>&copy; 2024 HACKERPUNK. All rights reserved.</p>
-        <p>Follow us on <a href="#">Discord</a></p>
+        <p>&copy; 2025 HACKERPUNK. All rights reserved.</p>
+        <p>
+            <a href="https://tront.xyz" target="_blank">Tront.xyz</a> | 
+            <a href="https://github.com/TrentSterling" target="_blank">GitHub</a> | 
+            Follow us on <a href="https://discord.gg/0hyoWZyM6y7kkFCN" target="_blank">Discord</a>
+        </p>
     </footer>
 
-    <div class="privacy-policy">
-        <h2>🔒 HACKERPUNK Privacy Policy</h2>
-        <p>Thank you for using HACKERPUNK, developed by Tront. We understand that your privacy is important to you, and we are committed to protecting it. This privacy policy explains what data we collect and how we use it.</p>
-        
-        <h3>Data Collection and Use</h3>
-        <p>HACKERPUNK does not collect any personal data from our game application on any platform. We do not collect any analytics or personal information. We do not use any collected data for marketing purposes.</p>
-        
-        <h3>Security</h3>
-        <p>The security of your personal data is of the utmost importance to us. While we make every effort to protect it, we cannot guarantee the absolute security of your data. HACKERPUNK does not leak any personal data.</p>
-        
-        <h3>Cookies</h3>
-        <p>Cookies are text files placed on your computer to collect standard Internet log information and visitor behavior information. You can set your browser not to accept cookies, or you can remove them from your browser by following the instructions at allaboutcookies.org. Please note that some features of our website may not function as a result.</p>
-        
-        <h3>Privacy Policies of Other Websites</h3>
-        <p>Our website may contain links to other websites. Please be aware that we are not responsible for the privacy practices of these other websites. We recommend that you read the privacy policies of each website that you visit.</p>
-        
-        <h3>Changes to Our Privacy Policy</h3>
-        <p>We review and update our privacy policy regularly. This privacy policy was last updated on May 17, 2025. If you have any questions or concerns about our privacy policy, please don't hesitate to contact us at trentsterling@gmail.com. We are always happy to help.</p>
-        
-        <p>© 2024 Tront. All rights reserved.</p>
-    </div>
+    <script>
+      // FOUC (Flash of Unstyled Content) Prevention Script
+      (function() {
+          // Use the Promise-based API for modern browsers, with a fallback.
+          if (document.fonts && document.fonts.ready) {
+              document.fonts.ready.then(() => {
+                  document.body.classList.add('fonts-loaded');
+              });
+          } else {
+              // Fallback for older browsers that might not support document.fonts
+              setTimeout(() => document.body.classList.add('fonts-loaded'), 300);
+          }
+      })();
+    </script>
 </body>
 </html>
