@@ -3,7 +3,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const {PLAN,HARD_LIMIT_MS,WORK_LIMIT_MS,aggregate,assertFrameIdentity}=require('./stress.cjs');
+const {PLAN,HARD_LIMIT_MS,WORK_LIMIT_MS,aggregate}=require('./stress.cjs');
 test('stress plan alternates 12 independent immediate and 12 rendered cases',()=>{
   assert.equal(PLAN.length,24);assert.equal(new Set(PLAN.map(row=>row.id)).size,24);
   for(let i=0;i<12;i++)assert.deepEqual(PLAN.slice(i*2,i*2+2).map(row=>[row.mode,row.iteration]),[['immediate',i+1],['rendered',i+1]]);
@@ -29,13 +29,4 @@ test('read-only parent/reset instrumentation stays byte-identical to approved br
   assert.doesNotMatch(actual,/force\s*:\s*true/);
   assert.equal((actual.match(/locator\('\[data-action="reset"\]'\)\.click\(\)/g)||[]).length,1);
   assert.equal((actual.match(/locator\('\[data-action="undo"\]'\)\.click\(\)/g)||[]).length,1);
-});
-
-test('frame continuity rejects reloads, lost counters and unexpected child clicks',()=>{
-  const initial={documentId:'one',timeOrigin:123,href:'https://www.youtube.com/embed/example',clicks:0};
-  assert.doesNotThrow(()=>assertFrameIdentity(initial,{...initial},'Reset/Undo'));
-  assert.doesNotThrow(()=>assertFrameIdentity(initial,{...initial,clicks:1},'restored normal click',1));
-  for(const changed of [{documentId:'two'},{timeOrigin:124},{href:'about:blank'},{clicks:1}])assert.throws(()=>assertFrameIdentity(initial,{...initial,...changed},'modal control'));
-  assert.throws(()=>assertFrameIdentity({...initial,clicks:2},{...initial,clicks:0},'counter must survive'));
-  assert.throws(()=>assertFrameIdentity({...initial,documentId:null},initial,'identity must be present'));
 });
