@@ -21,6 +21,18 @@ async function check(name, action) {
   save();
 }
 const pause = ms => new Promise(resolve=>setTimeout(resolve,ms));
+function resetHitTestInPage(){
+  const dialog=document.querySelector('#tront-theme-editor'),reset=dialog?.querySelector('[data-action="reset"]');
+  const describe=el=>el?{tag:el.tagName,id:el.id,class:typeof el.className==='string'?el.className:'',action:el.getAttribute('data-action')}:null;
+  const rect=el=>{if(!el)return null;const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom};};
+  const style=el=>{const cs=getComputedStyle(el);return {pointerEvents:cs.pointerEvents,zIndex:cs.zIndex,position:cs.position,transform:cs.transform,opacity:cs.opacity,visibility:cs.visibility,display:cs.display};};
+  const r=rect(reset),point=r?{x:r.x+r.width/2,y:r.y+r.height/2}:null;
+  return {time:performance.now(),scroll:{x:scrollX,y:scrollY},viewport:{width:innerWidth,height:innerHeight},active:describe(document.activeElement),
+    dialog:{rect:rect(dialog),style:style(dialog),open:dialog.open,modal:dialog.matches(':modal'),scrollTop:dialog.scrollTop},
+    reset:{rect:r,style:style(reset),point,hit:describe(document.elementFromPoint(point.x,point.y)),stack:document.elementsFromPoint(point.x,point.y).map(describe)},
+    iframes:[...document.querySelectorAll('iframe')].map(el=>({...describe(el),src:el.getAttribute('src'),rect:rect(el),style:style(el),explicitInert:el.inert})),
+    modalElements:[...document.querySelectorAll(':modal')].map(describe)};
+}
 function interactionStateInPage(){
   const dialog=document.querySelector('#tront-theme-editor'),opener=document.querySelector('#tront-theme-btn'),active=document.activeElement;
   return {dialogOpen:dialog?.open,expanded:opener?.getAttribute('aria-expanded'),project:document.documentElement.getAttribute('data-te-project'),active:active?{tag:active.tagName,id:active.id,name:active.getAttribute('name'),action:active.getAttribute('data-action')}:null,preset:dialog?.querySelector('[name="preset"]')?.value,stored:window.TrontThemeEditor?localStorage.getItem(TrontThemeEditor.key):null,closeEvents:window.__qaCloseEvents||0,trace:window.__qaInteractionTrace||[]};
@@ -31,10 +43,11 @@ function instrumentInteractionsInPage(){
   dialog.addEventListener('close',()=>{window.__qaCloseEvents++;});
   function entry(event,phase){
     const target=event.target,active=document.activeElement;
-    const record={event:event.type,phase,time:performance.now(),target:target?.tagName,id:target?.id,action:target?.closest?.('[data-action]')?.getAttribute('data-action')||null,name:target?.getAttribute?.('name')||null,dialogOpen:dialog.open,expanded:document.querySelector('#tront-theme-btn')?.getAttribute('aria-expanded'),project:document.documentElement.getAttribute('data-te-project'),active:{tag:active?.tagName,id:active?.id,name:active?.getAttribute?.('name')||null,action:active?.getAttribute?.('data-action')||null},preset:dialog.querySelector('[name="preset"]')?.value};
+    const record={event:event.type,phase,time:performance.now(),clientX:event.clientX,clientY:event.clientY,button:event.button,modal:dialog.matches(':modal'),path:event.composedPath?.().slice(0,5).map(el=>({tag:el.tagName,id:el.id,action:el.getAttribute?.('data-action')})),target:target?.tagName,id:target?.id,action:target?.closest?.('[data-action]')?.getAttribute('data-action')||null,name:target?.getAttribute?.('name')||null,dialogOpen:dialog.open,expanded:document.querySelector('#tront-theme-btn')?.getAttribute('aria-expanded'),project:document.documentElement.getAttribute('data-te-project'),active:{tag:active?.tagName,id:active?.id,name:active?.getAttribute?.('name')||null,action:active?.getAttribute?.('data-action')||null},preset:dialog.querySelector('[name="preset"]')?.value};
     window.__qaInteractionTrace.push(record);if(window.__qaInteractionTrace.length>600)window.__qaInteractionTrace.shift();
   }
-  for(const type of ['pointerdown','click','input','change','close','cancel','focusin'])document.addEventListener(type,event=>{if(event.target===dialog||event.target?.closest?.('#tront-theme-editor,#tront-theme-btn')){entry(event,'capture');queueMicrotask(()=>entry(event,'settled'));}},true);
+  window.addEventListener('message',event=>{if(event.data?.__themeQA==='iframe-pointer'){window.__qaInteractionTrace.push({event:'iframe-'+event.data.type,phase:'iframe',time:performance.now(),iframeOrigin:event.origin,clientX:event.data.clientX,clientY:event.data.clientY,modal:dialog.matches(':modal'),dialogOpen:dialog.open});}});
+  for(const type of ['pointerdown','pointerup','mousedown','mouseup','click','input','change','close','cancel','focusin'])document.addEventListener(type,event=>{if(['pointerdown','pointerup','mousedown','mouseup','click'].includes(event.type)||event.target===dialog||event.target?.closest?.('#tront-theme-editor,#tront-theme-btn')){entry(event,'capture');queueMicrotask(()=>entry(event,'settled'));}},true);
 }
 function fullOverflowInPage(){
   const viewport=innerWidth;
@@ -140,7 +153,7 @@ async function main(){
           const response=await route.fetch({url:origin+url.pathname,timeout:60000});await route.fulfill({response});return;
         }
         if(/(^|\.)youtube(?:-nocookie)?\.com$/.test(url.hostname)&&url.pathname.startsWith('/embed/')){
-          await route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><body style="margin:0;background:#111;color:#bbb;font:16px system-ui;display:grid;place-items:center;height:100vh"><p>QA: YouTube playback unverified (provider frame mocked)</p></body></html>'});return;
+          await route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><body style="margin:0;background:#111;color:#bbb;font:16px system-ui;display:grid;place-items:center;height:100vh"><p>QA: YouTube playback unverified (provider frame mocked)</p><script>for(const type of ["pointerdown","pointerup","click"])document.addEventListener(type,e=>parent.postMessage({__themeQA:"iframe-pointer",type:e.type,clientX:e.clientX,clientY:e.clientY},"*"),true);</script></body></html>'});return;
         }
         const allowed=((url.hostname==='fonts.googleapis.com'&&request.resourceType()==='stylesheet')||(url.hostname==='fonts.gstatic.com'&&request.resourceType()==='font')||(['tront.xyz','blog.tront.xyz','hackerpunk.s3.amazonaws.com'].includes(url.hostname)&&request.resourceType()==='image')||(url.hostname==='tront.xyz'&&url.pathname==='/favicon.png'&&request.resourceType()==='other'));
         if(!allowed){report.warnings.push({type:'blocked-external-request',url:request.url(),resourceType:request.resourceType()});await route.abort('blockedbyclient');return;}
@@ -262,13 +275,26 @@ async function main(){
       }
     });
     await check('isolated fresh-context Reset and Undo keep exact native/custom state',async()=>{
-      const fresh=await contextFor(current.origin,1440);let p;
+      const fresh=await contextFor(current.origin,1440);let p,initialResetFailed=false;
       try{
         p=await load(fresh,current.origin);await choose(p,'cyan');const before=await stored(p);await open(p);
-        await p.locator('[data-action="reset"]').click();const reset=await p.evaluate(interactionStateInPage);report.interactions.push({test:'isolated-first-reset',state:reset});
-        assert.equal(reset.project,'native');assert.equal(await stored(p),null);
+        report.interactions.push({test:'isolated-reset-preclick-hit-test',geometry:await p.evaluate(resetHitTestInPage)});
+        await p.locator('[data-action="reset"]').click();const reset=await p.evaluate(interactionStateInPage);report.interactions.push({test:'isolated-first-reset',state:reset,geometry:await p.evaluate(resetHitTestInPage)});
+        initialResetFailed=reset.project!=='native'||(await stored(p))!==null;assert.equal(reset.project,'native');assert.equal(await stored(p),null);
         await p.locator('[data-action="undo"]').click();assert.deepEqual(await stored(p),before);assert.equal(await p.getAttribute('html','data-te-project'),'custom');await close(p);
-      }finally{if(p&&!p.isClosed())report.interactions.push({test:'isolated-reset-final',state:await p.evaluate(interactionStateInPage)});await fresh.close();}
+      }catch(error){if(p&&!p.isClosed()){report.interactions.push({test:'isolated-reset-failure-hit-test',geometry:await p.evaluate(resetHitTestInPage),state:await p.evaluate(interactionStateInPage)});await p.screenshot({path:path.join(options.output,'isolated-reset-failure.png')});report.screenshots.push({file:'isolated-reset-failure.png',position:'failure'});}
+        report.interactions.push({test:'isolated-reset-original-assertion-failure',error:error.message,strictFailureRetained:true});save();
+        if(initialResetFailed&&p&&!p.isClosed()){
+          let diagnosticStyle;
+          try{
+            diagnosticStyle=await p.addStyleTag({content:'html:has(#tront-theme-editor:modal) iframe { pointer-events: none !important; }'});
+            report.interactions.push({test:'diagnostic-only-iframe-containment-before',geometry:await p.evaluate(resetHitTestInPage),state:await p.evaluate(interactionStateInPage),doesNotChangeOriginalFailure:true});
+            await p.locator('[data-action="reset"]').click();
+            report.interactions.push({test:'diagnostic-only-iframe-containment-after-normal-click',geometry:await p.evaluate(resetHitTestInPage),state:await p.evaluate(interactionStateInPage),doesNotChangeOriginalFailure:true});
+          }catch(diagnosticError){report.interactions.push({test:'diagnostic-only-iframe-containment-error',error:diagnosticError.message,doesNotChangeOriginalFailure:true});}
+          finally{if(diagnosticStyle)await diagnosticStyle.evaluate(el=>el.remove());}
+        }
+        throw error;}finally{if(p&&!p.isClosed())report.interactions.push({test:'isolated-reset-final',state:await p.evaluate(interactionStateInPage)});await fresh.close();}
     });
     await check('Reset returns native exactly; Undo restores prior custom state; reset persistence clears only own key',async()=>{
       await page.evaluate(()=>{window.__qaInteractionTrace=[];});await choose(page,'cyan');const before=await stored(page);await open(page);report.interactions.push({test:'sequence-reset-before-click',state:await page.evaluate(interactionStateInPage)});await page.locator('[data-action="reset"]').click();report.interactions.push({test:'sequence-first-reset-after-click',state:await page.evaluate(interactionStateInPage)});assert.equal(await page.getAttribute('html','data-te-project'),'native');assert.equal(await stored(page),null);
