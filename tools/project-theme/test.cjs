@@ -56,11 +56,17 @@ class Element {
 }
 class Dialog extends Element {
     showModal() { assert.equal(this.open || false, false, 'showModal is not called twice'); this.open = true; }
-    close() { this.open = false; this.fire('close'); }
+    close() {
+        if (!this.open) return;
+        this.open = false;
+        if (this.doc.queuedDialogClose) this.doc.closeTasks.push(() => this.fire('close'));
+        else this.fire('close');
+    }
 }
 function environment(options = {}) {
     const writes = [], reads = [], removals = [], store = { ...(options.storage || {}) };
-    const doc = { readyState: options.loading ? 'loading' : 'complete', listeners: {}, activeElement: null };
+    const doc = { readyState: options.loading ? 'loading' : 'complete', listeners: {}, activeElement: null,
+        queuedDialogClose: !!options.queuedDialogClose, closeTasks: [] };
     doc.documentElement = new Element('html', { ...(options.optIn === false ? {} : { 'data-tront-theme-editor': '' }), ...(options.gallery ? { 'data-tront-theme-surface': 'gallery', 'data-te-gallery': 'native' } : {}), ...(options.project ? { 'data-tront-theme-surface': 'project', 'data-te-project': 'native' } : {}), ...(options.attrs || {}) }, doc);
     doc.documentElement.style.colorScheme = options.colorScheme || '';
     doc.body = new Element('body', {}, doc);
@@ -85,6 +91,7 @@ function environment(options = {}) {
         api: win.TrontThemeEditor,
         ready() { doc.readyState = 'complete'; (doc.listeners.DOMContentLoaded || []).forEach(fn => fn()); },
         get dialog() { return doc.body.children[0]; },
+        flushClose(count = doc.closeTasks.length) { while (count-- > 0 && doc.closeTasks.length) doc.closeTasks.shift()(); },
         storageEvent(key) { (events.storage || []).forEach(fn => fn({ key })); }
     };
 }
@@ -474,6 +481,60 @@ test('project modal keeps native focus/Tab, outside dismissal, repeated open and
     env.dialog.fire('pointerdown', { clientX: 10, clientY: 10 });
     env.dialog.fire('click', { clientX: 10, clientY: 10 }); assert.equal(env.dialog.open, false);
     assert.equal(env.doc.activeElement, env.opener); assert.deepEqual(env.writes, []);
+});
+
+test('explicit close updates modal state synchronously even when the browser queues close events', () => {
+    const env = environment({ project: 'punk', queuedDialogClose: true });
+    for (let i = 0; i < 3; i++) {
+        env.opener.fire('click'); click(env, 'close');
+        assert.equal(env.dialog.open, false);
+        assert.equal(env.opener.attrs['aria-expanded'], 'false');
+        assert.equal(env.doc.activeElement, env.opener);
+    }
+    assert.equal(env.doc.closeTasks.length, 3);
+    env.flushClose();
+    assert.equal(env.opener.attrs['aria-expanded'], 'false');
+});
+
+test('a delayed close event cannot collapse aria state or move focus after reopening', () => {
+    const env = environment({ project: 'monke', queuedDialogClose: true });
+    env.opener.fire('click'); click(env, 'close'); env.opener.fire('click');
+    const color = env.dialog.querySelector('[name="color-2"]'); color.focus();
+    env.flushClose();
+    assert.equal(env.dialog.open, true);
+    assert.equal(env.opener.attrs['aria-expanded'], 'true');
+    assert.equal(env.doc.activeElement, color);
+    change(env, 'preset', 'cyan'); click(env, 'reset');
+    assert.equal(presentation(env), 'native'); assert.equal(env.store[env.api.key], undefined);
+});
+
+test('a stale close task does not split a new session continuous edit into extra undo steps', () => {
+    const env = environment({ project: 'punk', queuedDialogClose: true });
+    env.opener.fire('click'); click(env, 'close'); env.opener.fire('click');
+    change(env, 'angle', 20, 'input'); env.flushClose();
+    change(env, 'angle', 30, 'input'); change(env, 'angle', 40);
+    click(env, 'undo');
+    assert.equal(presentation(env), 'native');
+    assert.equal(env.dialog.querySelector('[data-action="undo"]').disabled, true);
+});
+
+test('a handled close notification cannot steal focus from a later action while still closed', () => {
+    const env = environment({ project: 'monke', queuedDialogClose: true });
+    env.opener.fire('click'); click(env, 'close');
+    const other = new Element('a', { href: '/games/' }, env.doc); other.focus();
+    env.flushClose();
+    assert.equal(env.doc.activeElement, other);
+    assert.equal(env.opener.attrs['aria-expanded'], 'false');
+});
+
+test('native closing finalizes the prior draft before a same-task reopen and ignores its late event', () => {
+    const env = environment({ project: 'punk', queuedDialogClose: true });
+    env.opener.fire('click'); change(env, 'angle', 20, 'input');
+    env.dialog.close(); // Native Escape closes immediately, notification is queued.
+    env.opener.fire('click'); change(env, 'angle', 30, 'input'); env.flushClose();
+    change(env, 'angle', 40); click(env, 'undo');
+    assert.equal(stateOf(env).angle, 20);
+    click(env, 'undo'); assert.equal(presentation(env), 'native');
 });
 
 test('project CSS excludes generic page recoloring but retains shared dialog/nav/focus contracts', () => {

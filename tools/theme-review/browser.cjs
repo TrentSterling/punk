@@ -7,19 +7,49 @@ const {argumentsFor, sourceCheck} = require('./source.cjs');
 const {startServer} = require('./server.cjs');
 const options = argumentsFor();
 fs.mkdirSync(options.output,{recursive:true});
-const report = {project:options.project,startedAt:new Date().toISOString(),checks:[],errors:[],warnings:[],network:[],media:[],screenshots:[],audits:[],nativeComparisons:[],limitations:[
+const report = {project:options.project,startedAt:new Date().toISOString(),checks:[],errors:[],warnings:[],network:[],media:[],screenshots:[],audits:[],nativeComparisons:[],overflowComparisons:[],interactions:[],limitations:[
   'YouTube is mocked with an explicitly labelled inert frame. YouTube playback, provider availability, cookies and controls are unverified.',
   'Native colors are compared with the original page, not claimed to meet a new contrast standard.',
   'Custom contrast is a conservative computed foreground/background envelope audit, not a pixel-level antialiasing or vision certification. Decorative particles, emoji and media pixels/fallback text are excluded.',
   'External fonts/images are allowed only on known original hosts; blocked/unavailable assets are recorded and shared between baseline/current for consistent fallback.'
 ]};
 const save = () => fs.writeFileSync(path.join(options.output,'browser.json'),JSON.stringify(report,null,2)+'\n');
+let diagnosticPage=null;
 async function check(name, action) {
   try {const details = await action(); report.checks.push({name,pass:true,...(details===undefined?{}:{details})});}
-  catch(error){report.checks.push({name,pass:false,error:error.stack});report.errors.push({name,message:error.message});}
+  catch(error){let browserState=null;try{if(diagnosticPage&&!diagnosticPage.isClosed())browserState=await diagnosticPage.evaluate(interactionStateInPage);}catch(diagnosticError){browserState={error:diagnosticError.message};}report.checks.push({name,pass:false,error:error.stack,browserState});report.errors.push({name,message:error.message});}
   save();
 }
 const pause = ms => new Promise(resolve=>setTimeout(resolve,ms));
+function interactionStateInPage(){
+  const dialog=document.querySelector('#tront-theme-editor'),opener=document.querySelector('#tront-theme-btn'),active=document.activeElement;
+  return {dialogOpen:dialog?.open,expanded:opener?.getAttribute('aria-expanded'),project:document.documentElement.getAttribute('data-te-project'),active:active?{tag:active.tagName,id:active.id,name:active.getAttribute('name'),action:active.getAttribute('data-action')}:null,preset:dialog?.querySelector('[name="preset"]')?.value,stored:window.TrontThemeEditor?localStorage.getItem(TrontThemeEditor.key):null,closeEvents:window.__qaCloseEvents||0,trace:window.__qaInteractionTrace||[]};
+}
+function instrumentInteractionsInPage(){
+  const dialog=document.querySelector('#tront-theme-editor');if(!dialog||window.__qaInteractionTrace)return;
+  window.__qaInteractionTrace=[];window.__qaCloseEvents=0;
+  dialog.addEventListener('close',()=>{window.__qaCloseEvents++;});
+  function entry(event,phase){
+    const target=event.target,active=document.activeElement;
+    const record={event:event.type,phase,time:performance.now(),target:target?.tagName,id:target?.id,action:target?.closest?.('[data-action]')?.getAttribute('data-action')||null,name:target?.getAttribute?.('name')||null,dialogOpen:dialog.open,expanded:document.querySelector('#tront-theme-btn')?.getAttribute('aria-expanded'),project:document.documentElement.getAttribute('data-te-project'),active:{tag:active?.tagName,id:active?.id,name:active?.getAttribute?.('name')||null,action:active?.getAttribute?.('data-action')||null},preset:dialog.querySelector('[name="preset"]')?.value};
+    window.__qaInteractionTrace.push(record);if(window.__qaInteractionTrace.length>600)window.__qaInteractionTrace.shift();
+  }
+  for(const type of ['pointerdown','click','input','change','close','cancel','focusin'])document.addEventListener(type,event=>{if(event.target===dialog||event.target?.closest?.('#tront-theme-editor,#tront-theme-btn')){entry(event,'capture');queueMicrotask(()=>entry(event,'settled'));}},true);
+}
+function fullOverflowInPage(){
+  const viewport=innerWidth;
+  const label=el=>({tag:el.tagName,id:el.id,class:typeof el.className==='string'?el.className:'',text:el.childElementCount?null:el.textContent.trim().slice(0,48)});
+  const nodes=[document.documentElement,...document.querySelectorAll('body,body *')].filter(el=>!el.closest('script,style,noscript,#tront-theme-editor'));
+  const rows=[];
+  for(const el of nodes){
+    const cs=getComputedStyle(el),r=el.getBoundingClientRect();if(cs.display==='none'||!el.getClientRects().length)continue;
+    const ancestors=[];for(let a=el.parentElement;a;a=a.parentElement){const ac=getComputedStyle(a);if(ac.overflowX!=='visible'||ac.overflowY!=='visible')ancestors.push({...label(a),overflowX:ac.overflowX,overflowY:ac.overflowY,x:a.getBoundingClientRect().x,right:a.getBoundingClientRect().right});}
+    const row={...label(el),category:el.closest('#particle-container')?'decorative':el.closest('#magic-navbar-container')?'navigation':'content',x:r.x,right:r.right,y:r.y+scrollY,width:r.width,height:r.height,clientWidth:el.clientWidth,scrollWidth:el.scrollWidth,position:cs.position,left:cs.left,rightStyle:cs.right,transform:cs.transform,overflowX:cs.overflowX,overflowY:cs.overflowY,opacity:cs.opacity,visibility:cs.visibility,clippingAncestors:ancestors};
+    row.outsideViewport=r.x< -1.1||r.right>viewport+1.1;row.internalOverflow=el.scrollWidth>el.clientWidth+1;
+    if(row.outsideViewport||row.internalOverflow||el.id==='particle-container'||el.classList.contains('particle'))rows.push(row);
+  }
+  return {viewport,document:document.documentElement.scrollWidth,body:document.body.scrollWidth,scrollX,rows};
+}
 function snapshotInPage() {
   const selectors='body,header,main,footer,section,h1,h2,h3,p,ul,li,.content-container,.video-grid-container,.video-grid,.video-container,.slide-image-container,img,video,iframe,.cta-button';
   const props=['color','backgroundColor','backgroundImage','backgroundSize','backgroundPosition','transform','fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','padding','margin','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','borderTopColor','borderRadius','display','gap','gridTemplateColumns','flexDirection','textShadow','boxShadow'];
@@ -112,7 +142,7 @@ async function main(){
         if(/(^|\.)youtube(?:-nocookie)?\.com$/.test(url.hostname)&&url.pathname.startsWith('/embed/')){
           await route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><body style="margin:0;background:#111;color:#bbb;font:16px system-ui;display:grid;place-items:center;height:100vh"><p>QA: YouTube playback unverified (provider frame mocked)</p></body></html>'});return;
         }
-        const allowed=((url.hostname==='fonts.googleapis.com'&&request.resourceType()==='stylesheet')||(url.hostname==='fonts.gstatic.com'&&request.resourceType()==='font')||(['tront.xyz','hackerpunk.s3.amazonaws.com'].includes(url.hostname)&&request.resourceType()==='image'));
+        const allowed=((url.hostname==='fonts.googleapis.com'&&request.resourceType()==='stylesheet')||(url.hostname==='fonts.gstatic.com'&&request.resourceType()==='font')||(['tront.xyz','blog.tront.xyz','hackerpunk.s3.amazonaws.com'].includes(url.hostname)&&request.resourceType()==='image')||(url.hostname==='tront.xyz'&&url.pathname==='/favicon.png'&&request.resourceType()==='other'));
         if(!allowed){report.warnings.push({type:'blocked-external-request',url:request.url(),resourceType:request.resourceType()});await route.abort('blockedbyclient');return;}
         if(!externalCache.has(request.url()))externalCache.set(request.url(),(async()=>{try{const response=await route.fetch({timeout:20000});if(!response.ok())throw Error('HTTP '+response.status());return {status:response.status(),headers:response.headers(),body:await response.body()};}catch(error){report.warnings.push({type:'external-asset-unavailable',url:request.url(),message:error.message});return null;}})());
         const cached=await externalCache.get(request.url());if(cached)await route.fulfill(cached);else await route.abort('failed');
@@ -129,14 +159,29 @@ async function main(){
       if(options.project==='monke')await page.waitForFunction(()=>[...document.querySelectorAll('video')].every(v=>v.readyState>=1),{},{timeout:45000});
       await page.addStyleTag({content:'*,*::before,*::after{transition:none!important}html{scroll-behavior:auto!important}'});
       await page.evaluate(()=>document.getAnimations().forEach(animation=>{animation.pause();animation.currentTime=0;}));
+      await page.evaluate(instrumentInteractionsInPage);
       return page;
     }
     async function shot(page,name,position='top'){
       await page.evaluate(position=>scrollTo(0,position==='footer'?document.documentElement.scrollHeight:position==='mid'?document.documentElement.scrollHeight/2:0),position);await page.waitForTimeout(60);
       const file=name+'.png';await page.screenshot({path:path.join(options.output,file)});report.screenshots.push({file,position});
     }
-    async function open(page){if(!await page.locator('#tront-theme-editor').evaluate(el=>el.open))await page.locator('#tront-theme-btn').click();}
-    async function close(page){if(await page.locator('#tront-theme-editor').evaluate(el=>el.open))await page.locator('[data-action="close"]').click();}
+    async function open(page){
+      if(!await page.locator('#tront-theme-editor').evaluate(el=>el.open)){
+        await page.waitForFunction(()=>document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='false',null,{timeout:5000});
+        await page.locator('#tront-theme-btn').click();
+      }
+      await page.waitForFunction(()=>document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='true',null,{timeout:5000});
+    }
+    async function waitClosed(page,previousCount=null){
+      await page.waitForFunction(previousCount=>!document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='false'&&document.activeElement===document.querySelector('#tront-theme-btn')&&(previousCount===null||(window.__qaCloseEvents||0)>previousCount),previousCount,{timeout:5000});
+    }
+    async function close(page){
+      await page.evaluate(instrumentInteractionsInPage);
+      if(await page.locator('#tront-theme-editor').evaluate(el=>el.open)){
+        const count=await page.evaluate(()=>window.__qaCloseEvents||0);await page.locator('[data-action="close"]').click();await waitClosed(page,count);
+      }else await waitClosed(page);
+    }
     async function choose(page,preset){await open(page);await page.selectOption('[name="preset"]',preset);await close(page);await page.waitForTimeout(25);}
     async function stored(page){return page.evaluate(()=>JSON.parse(localStorage.getItem(TrontThemeEditor.key)));}
     async function audit(page,label){const result=await page.evaluate(contrastAuditInPage);report.audits.push({label,...result});assert.deepEqual(result.failures,[],`${label}: ${JSON.stringify(result.failures.slice(0,12))}`);return {textCount:result.textCount,bound:result.bound};}
@@ -165,7 +210,19 @@ async function main(){
         await open(p);await shot(p,`editor-${width}-${width===1440?'custom':'light'}`);await close(p);
       }finally{await bc.close();await cc.close();}
     }
-    const context=await contextFor(current.origin,1440),page=await load(context,current.origin);
+    await check('320px baseline/current full overflow diagnostic',async()=>{
+      const bc=await contextFor(baseline.origin,320),cc=await contextFor(current.origin,320);
+      try{
+        const b=await load(bc,baseline.origin),p=await load(cc,current.origin);
+        const before=await b.evaluate(fullOverflowInPage),after=await p.evaluate(fullOverflowInPage);
+        const diagnostic={width:320,before,after,documentWidthChanged:after.document-before.document,bodyWidthChanged:after.body-before.body};
+        report.overflowComparisons.push(diagnostic);
+        await shot(b,'native-baseline-320-overflow');await shot(p,'native-current-320-overflow');
+        fs.writeFileSync(path.join(options.output,'overflow-320.json'),JSON.stringify(diagnostic,null,2)+'\n');
+        return {baselineDocument:before.document,currentDocument:after.document,baselineBody:before.body,currentBody:after.body,baselineOverflowElements:before.rows.length,currentOverflowElements:after.rows.length};
+      }finally{await bc.close();await cc.close();}
+    });
+    const context=await contextFor(current.origin,1440),page=await load(context,current.origin);diagnosticPage=page;
     await check('canonical nav visual order, five controls and exact destinations',async()=>{
       const nav=await page.locator('#magic-navbar-container').evaluate(el=>[...el.querySelectorAll('a,button')].map(x=>({text:x.textContent.trim().replace(/^◐\s*/,''),href:x.getAttribute('href'),x:x.getBoundingClientRect().x})).sort((a,b)=>a.x-b.x));
       assert.deepEqual(nav.map(x=>x.text),['Home','Games','Blog','Discord','Theme']);assert.deepEqual(nav.slice(0,4).map(x=>x.href),['https://tront.xyz/','https://tront.xyz/games/','https://tront.xyz/blog/','https://tront.xyz/discord/']);return nav;
@@ -191,11 +248,30 @@ async function main(){
       await page.keyboard.press('Tab');assert.equal(await page.locator('[data-action="close"]').evaluate(el=>el===document.activeElement),true);
       for(let i=0;i<32;i++){await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>!!document.activeElement.closest('#tront-theme-editor')),true);}
       const range=page.locator('[name="position-1"]');await range.focus();const value=Number(await range.inputValue());await page.keyboard.press('ArrowRight');assert.equal(Number(await range.inputValue()),value+1);
-      await page.keyboard.press('Escape');assert.equal(await page.locator('#tront-theme-editor').evaluate(el=>el.open),false);assert.equal(await page.locator('#tront-theme-btn').evaluate(el=>el===document.activeElement),true);
+      const escapeCloseCount=await page.evaluate(()=>window.__qaCloseEvents||0);await page.keyboard.press('Escape');await waitClosed(page,escapeCloseCount);assert.equal(await page.locator('#tront-theme-editor').evaluate(el=>el.open),false);assert.equal(await page.locator('#tront-theme-btn').evaluate(el=>el===document.activeElement),true);
       for(let i=0;i<3;i++){await open(page);await close(page);}assert.equal(await page.locator('#tront-theme-btn').getAttribute('aria-expanded'),'false');
     });
+    await check('rapid same-task close/reopen ignores stale native close events',async()=>{
+      for(const method of ['button','native']){
+        await open(page);const closeEvents=await page.evaluate(()=>window.__qaCloseEvents||0);
+        await page.evaluate(method=>{const dialog=document.querySelector('#tront-theme-editor');if(method==='button')dialog.querySelector('[data-action="close"]').click();else dialog.close();document.querySelector('#tront-theme-btn').click();},method);
+        await page.waitForFunction(count=>(window.__qaCloseEvents||0)>count,closeEvents,{timeout:5000});
+        const state=await page.evaluate(interactionStateInPage);report.interactions.push({test:'rapid-close-reopen',method,state});
+        assert.equal(state.dialogOpen,true);assert.equal(state.expanded,'true');assert.equal(state.active.action,'close');
+        await close(page);
+      }
+    });
+    await check('isolated fresh-context Reset and Undo keep exact native/custom state',async()=>{
+      const fresh=await contextFor(current.origin,1440);let p;
+      try{
+        p=await load(fresh,current.origin);await choose(p,'cyan');const before=await stored(p);await open(p);
+        await p.locator('[data-action="reset"]').click();const reset=await p.evaluate(interactionStateInPage);report.interactions.push({test:'isolated-first-reset',state:reset});
+        assert.equal(reset.project,'native');assert.equal(await stored(p),null);
+        await p.locator('[data-action="undo"]').click();assert.deepEqual(await stored(p),before);assert.equal(await p.getAttribute('html','data-te-project'),'custom');await close(p);
+      }finally{if(p&&!p.isClosed())report.interactions.push({test:'isolated-reset-final',state:await p.evaluate(interactionStateInPage)});await fresh.close();}
+    });
     await check('Reset returns native exactly; Undo restores prior custom state; reset persistence clears only own key',async()=>{
-      await choose(page,'cyan');const before=await stored(page);await open(page);await page.locator('[data-action="reset"]').click();assert.equal(await page.getAttribute('html','data-te-project'),'native');assert.equal(await stored(page),null);
+      await page.evaluate(()=>{window.__qaInteractionTrace=[];});await choose(page,'cyan');const before=await stored(page);await open(page);report.interactions.push({test:'sequence-reset-before-click',state:await page.evaluate(interactionStateInPage)});await page.locator('[data-action="reset"]').click();report.interactions.push({test:'sequence-first-reset-after-click',state:await page.evaluate(interactionStateInPage)});assert.equal(await page.getAttribute('html','data-te-project'),'native');assert.equal(await stored(page),null);
       await page.locator('[data-action="undo"]').click();assert.deepEqual(await stored(page),before);assert.equal(await page.getAttribute('html','data-te-project'),'custom');
       await close(page);await page.reload({waitUntil:'load'});assert.deepEqual(await stored(page),before);assert.equal(await page.getAttribute('html','data-te-project'),'custom');
       await open(page);await page.locator('[data-action="reset"]').click();await close(page);await page.reload({waitUntil:'load'});assert.equal(await stored(page),null);assert.equal(await page.getAttribute('html','data-te-project'),'native');
@@ -208,6 +284,7 @@ async function main(){
     await check('CTA still scrolls to the original features anchor',async()=>{await page.evaluate(()=>scrollTo(0,0));await page.locator('header .cta-button').click();await page.waitForTimeout(250);assert.equal(new URL(page.url()).hash,'#features');assert.ok(await page.evaluate(()=>scrollY>0&&document.querySelector('#features').getBoundingClientRect().top<innerHeight));await page.evaluate(()=>{history.replaceState(null,'',location.pathname);scrollTo(0,0);});});
     for(const width of [320,360,390,768,1440])for(const preset of ['project-original','light','cyan'])await check(`no page or nav overflow ${width}px ${preset}`,async()=>{
       await page.setViewportSize({width,height:900});await choose(page,preset);await page.evaluate(()=>scrollTo(0,0));const data=await overflow(page);
+      if(data.document>width+1)report.overflowComparisons.push({width,preset,current:await page.evaluate(fullOverflowInPage)});
       assert.ok(data.document<=width+1,JSON.stringify(data));assert.ok(data.nav.x>=-1&&data.nav.right<=width+1&&data.nav.scroll<=data.nav.client+1,JSON.stringify(data));
       for(const control of data.controls)assert.ok(control.display!=='none'&&control.x>=-1&&control.right<=width+1&&control.scroll<=control.client+1,JSON.stringify(control));
       const sorted=data.controls.slice().sort((a,b)=>a.x-b.x);for(let i=1;i<sorted.length;i++)assert.ok(sorted[i].x>=sorted[i-1].right-1,'overlapping nav controls');

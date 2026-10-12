@@ -20,7 +20,8 @@ original test basis, also verified against the upstream Git blob.
   navigation registry. No automatic page mounting or theme application.
 - `assets/css/tront-navbar.css`: byte-identical upstream primary-nav geometry.
 - `assets/js/tront-theme-editor.js`: adds validated project configuration,
-  isolated storage, a native project state, and native Reset/Undo. The token and
+  isolated storage, a native project state, native Reset/Undo, and idempotent
+  dialog-session cleanup that cannot affect a reopened modal. The token and
   harmony math is unchanged.
 - `assets/css/tront-theme-editor.css`: excludes `surface="project"` from generic
   page-color rules. Modal, primary-nav, accessible focus, hidden controls and
@@ -136,7 +137,16 @@ node --test tools/project-theme/test.cjs
 Tests retain the upstream deterministic contrast stress suite and DOM contracts,
 and add both projects' native/reset/undo, original peg values, storage isolation,
 failure handling, validation, modal behavior, CSS scope and provenance checks.
+The dialog fixture can queue close notifications like the browser: five race
+regressions failed against the original lifecycle handler and pass with the
+session-aware handler. Explicit close/backdrop actions settle synchronously;
+late close notifications cannot change a reopened dialog's focus, ARIA state,
+or undo grouping. Native Escape behavior remains browser-owned. Background
+focus restoration uses `preventScroll`.
 The DOM fixture is not a browser: it cannot prove CSS layout, native focus
 trapping, actual Escape defaults, responsive geometry, or visual preservation.
 Those require the separate GitHub Actions Playwright/visual checks against each
 landing page and its native baseline. Do not bypass blocked browser execution.
+
+The asynchronous close notification is specified in the
+[HTML dialog closing algorithm](https://html.spec.whatwg.org/multipage/interactive-elements.html#close-the-dialog).

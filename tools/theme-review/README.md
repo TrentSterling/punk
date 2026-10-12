@@ -46,3 +46,11 @@ Monke's absolute original media URLs remain unchanged. Playwright maps their net
 YouTube is intentionally replaced by an explicitly labelled inert frame. Only the unchanged iframe attributes/layout are verified; provider playback, controls and availability are **unverified**. External fonts and original image hosts are narrowly allowed and cached consistently across baseline/current contexts. Asset failure remains visible in the JSON warnings.
 
 Upload the entire output directory with the CI artifact step using `if: always()`, including failed jobs. Never describe an unexecuted browser suite, failed assertion or mocked YouTube playback as a pass.
+
+### Close-event and 320px diagnostics
+
+Dismissal checks wait for the browser's native `close` event and assert the final closed dialog, `aria-expanded=false`, and restored opener focus. The suite also deliberately closes/reopens in one JavaScript task, then waits for that queued close event and requires the reopened dialog to retain open/expanded/focused state. This detects stale-close races rather than masking them with a delay.
+
+Reset remains strict. A fresh-context Reset/Undo check is separate from the main interaction-sequence Reset, and both retain click/input/change/close/focus traces, selected palette, stored state, and native/custom attributes. A failure does not become an assumed timing pass.
+
+`overflow-320.json` and the `native-{baseline,current}-320-overflow.png` captures compare the untouched baseline and current page at 320px. The report includes off-viewport particles, every overflowing rendered element, scroll/client widths, transforms, positioning, and clipping ancestors. Decorative clipping can therefore be distinguished from content/nav regressions. Existing strict document/nav overflow assertions remain unchanged.
