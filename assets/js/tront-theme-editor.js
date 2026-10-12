@@ -314,13 +314,16 @@
             dialogSessionOpen = false;
             if (draftStart) { remember(draftStart); draftStart = null; sync(); }
             opener.setAttribute('aria-expanded', 'false');
-            opener.focus({ preventScroll: true });
+            // Native close already restored focus. Never overwrite a newer
+            // focus choice when its queued notification eventually arrives.
         }
         function closeEditor() {
+            if (!dialog.open) return;
             dialog.close();
             // Our close button/backdrop updates are synchronous; native Escape
             // still uses the browser's close event and its default behavior.
             finishClose();
+            if (!dialog.open) opener.focus({ preventScroll: true });
         }
         opener.addEventListener('click', function () {
             if (dialog.open) return;

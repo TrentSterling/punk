@@ -35,7 +35,7 @@ function resetHitTestInPage(){
 }
 function interactionStateInPage(){
   const dialog=document.querySelector('#tront-theme-editor'),opener=document.querySelector('#tront-theme-btn'),active=document.activeElement;
-  return {dialogOpen:dialog?.open,expanded:opener?.getAttribute('aria-expanded'),project:document.documentElement.getAttribute('data-te-project'),active:active?{tag:active.tagName,id:active.id,name:active.getAttribute('name'),action:active.getAttribute('data-action')}:null,preset:dialog?.querySelector('[name="preset"]')?.value,stored:window.TrontThemeEditor?localStorage.getItem(TrontThemeEditor.key):null,closeEvents:window.__qaCloseEvents||0,trace:window.__qaInteractionTrace||[]};
+  return {dialogOpen:dialog?.open,expanded:opener?.getAttribute('aria-expanded'),project:document.documentElement.getAttribute('data-te-project'),active:active?{tag:active.tagName,href:active.getAttribute('href'),id:active.id,name:active.getAttribute('name'),action:active.getAttribute('data-action')}:null,preset:dialog?.querySelector('[name="preset"]')?.value,stored:window.TrontThemeEditor?localStorage.getItem(TrontThemeEditor.key):null,closeEvents:window.__qaCloseEvents||0,trace:window.__qaInteractionTrace||[]};
 }
 function instrumentInteractionsInPage(){
   const dialog=document.querySelector('#tront-theme-editor');if(!dialog||window.__qaInteractionTrace)return;
@@ -274,6 +274,14 @@ async function main(){
         await close(page);
       }
     });
+    await check('queued native close preserves later deliberate nav focus',async()=>{
+      await open(page);const events=await page.evaluate(()=>window.__qaCloseEvents||0);
+      await page.evaluate(()=>{document.querySelector('#tront-theme-editor').close();document.querySelector('#magic-navbar-container a').focus();});
+      await page.waitForFunction(events=>(window.__qaCloseEvents||0)>events,events,{timeout:5000});
+      const state=await page.evaluate(interactionStateInPage);report.interactions.push({test:'native-close-later-nav-focus',state});
+      assert.equal(state.dialogOpen,false);assert.equal(state.expanded,'false');
+      assert.equal(await page.evaluate(()=>document.activeElement===document.querySelector('#magic-navbar-container a')),true,'queued close must not steal a deliberate later focus');
+    });
     await check('isolated fresh-context Reset and Undo keep exact native/custom state',async()=>{
       const fresh=await contextFor(current.origin,1440);let p,initialResetFailed=false;
       try{
@@ -295,6 +303,35 @@ async function main(){
           finally{if(diagnosticStyle)await diagnosticStyle.evaluate(el=>el.remove());}
         }
         throw error;}finally{if(p&&!p.isClosed())report.interactions.push({test:'isolated-reset-final',state:await p.evaluate(interactionStateInPage)});await fresh.close();}
+    });
+    if(options.project==='punk')await check('Punk modal contains iframe pointer input and restores it after Close and Escape',async()=>{
+      const fresh=await contextFor(current.origin,1440);let p;const transitions=[];
+      try{
+        p=await load(fresh,current.origin);const iframe=p.locator('iframe');assert.equal(await iframe.count(),1);
+        const original=await iframe.evaluate(el=>getComputedStyle(el).pointerEvents);assert.equal(original,'auto','original closed-page iframe accepts normal pointer input');
+        const observe=async label=>{const entry={label,pointerEvents:await iframe.evaluate(el=>getComputedStyle(el).pointerEvents),modal:await p.locator('#tront-theme-editor').evaluate(el=>el.matches(':modal'))};transitions.push(entry);return entry;};
+        await choose(p,'cyan');const before=await stored(p);await open(p);
+        assert.deepEqual(await observe('custom modal before Reset'),{label:'custom modal before Reset',pointerEvents:'none',modal:true});
+        // Keep a genuine first normal pointer activation; do not force or invoke the handler.
+        await p.locator('[data-action="reset"]').click();assert.equal(await p.getAttribute('html','data-te-project'),'native');assert.equal(await stored(p),null);
+        assert.deepEqual(await observe('native modal after Reset'),{label:'native modal after Reset',pointerEvents:'none',modal:true});
+        await p.locator('[data-action="undo"]').click();assert.deepEqual(await stored(p),before);assert.equal(await p.getAttribute('html','data-te-project'),'custom');
+        await close(p);assert.deepEqual(await observe('after Close'),{label:'after Close',pointerEvents:original,modal:false});
+        const oldFrameClicks=await p.evaluate(()=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').length);
+        // The controlled, inert provider frame still has the real cross-origin URL.
+        // This checks pointer restoration only; it does not verify YouTube playback.
+        await p.frameLocator('iframe').locator('p').click();
+        await p.waitForFunction(before=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').length>before,oldFrameClicks,{timeout:5000});
+        assert.equal(await p.locator('#tront-theme-editor').evaluate(el=>el.matches(':modal')),false);
+        const frameClick=await p.evaluate(()=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').at(-1));assert.equal(frameClick.modal,false);
+        await open(p);await p.selectOption('[name="preset"]','project-original');
+        assert.deepEqual(await observe('native modal before Escape'),{label:'native modal before Escape',pointerEvents:'none',modal:true});
+        const events=await p.evaluate(()=>window.__qaCloseEvents||0);await p.keyboard.press('Escape');await waitClosed(p,events);
+        assert.deepEqual(await observe('after real Escape'),{label:'after real Escape',pointerEvents:original,modal:false});
+        report.interactions.push({test:'punk-modal-iframe-containment',transitions,normalClosedFrameClick:frameClick,providerPlayback:'unverified; controlled inert iframe only'});
+        return {transitions,normalResetUndo:'passed',normalClosedFrameClick:'passed on controlled cross-origin placeholder',providerPlayback:'unverified'};
+      }catch(error){if(p&&!p.isClosed()){report.interactions.push({test:'punk-modal-iframe-containment-failure',transitions,state:await p.evaluate(interactionStateInPage),geometry:await p.evaluate(resetHitTestInPage)});await p.screenshot({path:path.join(options.output,'punk-modal-iframe-containment-failure.png')});}throw error;}
+      finally{await fresh.close();}
     });
     await check('Reset returns native exactly; Undo restores prior custom state; reset persistence clears only own key',async()=>{
       await page.evaluate(()=>{window.__qaInteractionTrace=[];});await choose(page,'cyan');const before=await stored(page);await open(page);report.interactions.push({test:'sequence-reset-before-click',state:await page.evaluate(interactionStateInPage)});await page.locator('[data-action="reset"]').click();report.interactions.push({test:'sequence-first-reset-after-click',state:await page.evaluate(interactionStateInPage)});assert.equal(await page.getAttribute('html','data-te-project'),'native');assert.equal(await stored(page),null);

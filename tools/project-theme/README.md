@@ -142,7 +142,11 @@ regressions failed against the original lifecycle handler and pass with the
 session-aware handler. Explicit close/backdrop actions settle synchronously;
 late close notifications cannot change a reopened dialog's focus, ARIA state,
 or undo grouping. Native Escape behavior remains browser-owned. Background
-focus restoration uses `preventScroll`.
+focus restoration uses `preventScroll` only during explicit close actions.
+The fixture also models immediate native focus restoration: a sixth regression,
+run for both projects, proves that queued cleanup preserves an external focus
+choice made after native closure. Native notifications and pre-reopen cleanup
+finalize state/history without focusing again.
 The DOM fixture is not a browser: it cannot prove CSS layout, native focus
 trapping, actual Escape defaults, responsive geometry, or visual preservation.
 Those require the separate GitHub Actions Playwright/visual checks against each

@@ -55,10 +55,16 @@ class Element {
     }
 }
 class Dialog extends Element {
-    showModal() { assert.equal(this.open || false, false, 'showModal is not called twice'); this.open = true; }
+    showModal() {
+        assert.equal(this.open || false, false, 'showModal is not called twice');
+        this.previouslyFocused = this.doc.activeElement; this.open = true;
+    }
     close() {
         if (!this.open) return;
         this.open = false;
+        // Native restoration happens before the queued close notification.
+        if (this.previouslyFocused) this.previouslyFocused.focus({ preventScroll: true });
+        this.previouslyFocused = null;
         if (this.doc.queuedDialogClose) this.doc.closeTasks.push(() => this.fire('close'));
         else this.fire('close');
     }
@@ -72,6 +78,11 @@ function environment(options = {}) {
     doc.body = new Element('body', {}, doc);
     const opener = new Element('button', { id: 'tront-theme-btn', hidden: '' }, doc);
     opener.children.push(new Element('span', { class: 'theme-label' }, doc), new Element('span', { class: 'theme-icon' }, doc));
+    // Model the initial user click's focus before showModal captures it.
+    opener.fire = function (type, extra) {
+        if (type === 'click' && !doc.body.children[0]?.open) this.focus();
+        Element.prototype.fire.call(this, type, extra);
+    };
     doc.getElementById = id => id === 'tront-theme-btn' ? opener : null;
     doc.createElement = name => name === 'dialog' ? new Dialog(name, {}, doc) : new Element(name, {}, doc);
     doc.addEventListener = (name, callback) => { (doc.listeners[name] ||= []).push(callback); };
@@ -535,6 +546,18 @@ test('native closing finalizes the prior draft before a same-task reopen and ign
     change(env, 'angle', 40); click(env, 'undo');
     assert.equal(stateOf(env).angle, 20);
     click(env, 'undo'); assert.equal(presentation(env), 'native');
+});
+
+for (const project of ['punk', 'monke']) test(`${project}: native close preserves external focus chosen before its queued notification`, () => {
+    const env = environment({ project, queuedDialogClose: true });
+    env.opener.fire('click'); change(env, 'angle', 20, 'input'); env.dialog.close();
+    assert.ok(env.doc.activeElement === env.opener, 'native close restores the opener immediately');
+    const other = new Element('a', { href: '/games/' }, env.doc); other.focus();
+    env.flushClose();
+    assert.ok(env.doc.activeElement === other, 'queued cleanup preserves the later focus choice');
+    assert.equal(env.opener.attrs['aria-expanded'], 'false');
+    env.opener.fire('click'); click(env, 'undo');
+    assert.equal(presentation(env), 'native', 'queued cleanup still records the pending draft');
 });
 
 test('project CSS excludes generic page recoloring but retains shared dialog/nav/focus contracts', () => {

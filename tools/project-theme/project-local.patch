@@ -139,7 +139,7 @@
              '<fieldset class="te-mode"><legend>Appearance</legend><label><input type="radio" name="mode" value="dark"> Dark</label><label><input type="radio" name="mode" value="light"> Light</label></fieldset>' +
              '<div class="te-preview" role="img" aria-label="Your selected gradient colors"></div>' +
              '<section class="te-details" aria-labelledby="te-gradient-title"><h3 id="te-gradient-title">Gradient</h3><div class="te-tuning">' +
-@@ -257,15 +306,31 @@
+@@ -257,15 +306,34 @@
          opener.setAttribute('aria-haspopup', 'dialog');
          opener.setAttribute('aria-controls', dialog.id);
          opener.setAttribute('aria-expanded', 'false');
@@ -151,13 +151,16 @@
 +            dialogSessionOpen = false;
 +            if (draftStart) { remember(draftStart); draftStart = null; sync(); }
 +            opener.setAttribute('aria-expanded', 'false');
-+            opener.focus({ preventScroll: true });
++            // Native close already restored focus. Never overwrite a newer
++            // focus choice when its queued notification eventually arrives.
 +        }
 +        function closeEditor() {
++            if (!dialog.open) return;
 +            dialog.close();
 +            // Our close button/backdrop updates are synchronous; native Escape
 +            // still uses the browser's close event and its default behavior.
 +            finishClose();
++            if (!dialog.open) opener.focus({ preventScroll: true });
 +        }
          opener.addEventListener('click', function () {
              if (dialog.open) return;
@@ -176,7 +179,7 @@
          // Keep sequential keyboard navigation inside the editor even when a
          // browser would otherwise move from the last control to browser chrome.
          // These endpoints are always visible/enabled; native Tab order between
-@@ -287,12 +352,12 @@
+@@ -287,12 +355,12 @@
          }
          dialog.addEventListener('pointerdown', function (event) { backdropDown = isOutside(event); });
          dialog.addEventListener('click', function (event) {
@@ -192,7 +195,7 @@
              if (action.dataset.action === 'undo' && history.length) {
                  state = history.pop(); draftStart = null; apply(); save(); sync();
              }
-@@ -311,13 +376,13 @@
+@@ -311,13 +379,13 @@
          dialog.addEventListener('input', function (event) { updateInput(event.target); });
          dialog.addEventListener('change', function (event) {
              var input = event.target;
