@@ -13,6 +13,7 @@ const report = {project:options.project,startedAt:new Date().toISOString(),check
   'Custom contrast is a conservative computed foreground/background envelope audit, not a pixel-level antialiasing or vision certification. Decorative particles, emoji and media pixels/fallback text are excluded.',
   'External fonts/images are allowed only on known original hosts; blocked/unavailable assets are recorded and shared between baseline/current for consistent fallback.'
 ]};
+if(options.project==='punk')report.priorUnsynchronizedEvidence={run:'https://github.com/TrentSterling/punk/actions/runs/38318818737',head:'ba0357',status:'failed',check:'closed iframe click without explicit rendered-frame synchronization',observation:'After Close, computed pointer-events was auto and :modal was false; parent IFRAME received pointerdown/up/click, but the child document did not report a click. That historical failure is retained separately and is not retroactively counted as passed.'};
 const save = () => fs.writeFileSync(path.join(options.output,'browser.json'),JSON.stringify(report,null,2)+'\n');
 let diagnosticPage=null;
 async function check(name, action) {
@@ -153,7 +154,7 @@ async function main(){
           const response=await route.fetch({url:origin+url.pathname,timeout:60000});await route.fulfill({response});return;
         }
         if(/(^|\.)youtube(?:-nocookie)?\.com$/.test(url.hostname)&&url.pathname.startsWith('/embed/')){
-          await route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><body style="margin:0;background:#111;color:#bbb;font:16px system-ui;display:grid;place-items:center;height:100vh"><p>QA: YouTube playback unverified (provider frame mocked)</p><script>for(const type of ["pointerdown","pointerup","click"])document.addEventListener(type,e=>parent.postMessage({__themeQA:"iframe-pointer",type:e.type,clientX:e.clientX,clientY:e.clientY},"*"),true);</script></body></html>'});return;
+          await route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><body style="margin:0;background:#111;color:#bbb;font:16px system-ui;display:grid;place-items:center;height:100vh"><p>QA: YouTube playback unverified (provider frame mocked)</p><script>window.__qaInnerClicks=0;window.__qaInnerPointerEvents=[];for(const type of ["pointerdown","pointerup","click"])document.addEventListener(type,e=>{if(e.type==="click")window.__qaInnerClicks++;window.__qaInnerPointerEvents.push({type:e.type,x:e.clientX,y:e.clientY,time:performance.now()});parent.postMessage({__themeQA:"iframe-pointer",type:e.type,clientX:e.clientX,clientY:e.clientY},"*");},true);</script></body></html>'});return;
         }
         const allowed=((url.hostname==='fonts.googleapis.com'&&request.resourceType()==='stylesheet')||(url.hostname==='fonts.gstatic.com'&&request.resourceType()==='font')||(['tront.xyz','blog.tront.xyz','hackerpunk.s3.amazonaws.com'].includes(url.hostname)&&request.resourceType()==='image')||(url.hostname==='tront.xyz'&&url.pathname==='/favicon.png'&&request.resourceType()==='other'));
         if(!allowed){report.warnings.push({type:'blocked-external-request',url:request.url(),resourceType:request.resourceType()});await route.abort('blockedbyclient');return;}
@@ -197,6 +198,33 @@ async function main(){
     }
     async function choose(page,preset){await open(page);await page.selectOption('[name="preset"]',preset);await close(page);await page.waitForTimeout(25);}
     async function stored(page){return page.evaluate(()=>JSON.parse(localStorage.getItem(TrontThemeEditor.key)));}
+    async function clickRenderedFrame(page,label){
+      const target=page.frameLocator('iframe').locator('p');
+      const result={label,synchronization:'explicit target scroll; two parent and child requestAnimationFrame ticks; rendered target screenshot',snapshots:[],clickAttempts:0,providerPlayback:'unverified; inert controlled cross-origin frame'};
+      async function capture(stage){
+        const child=await target.evaluate(el=>{const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},readyState:document.readyState,visibility:document.visibilityState,pointerEvents:getComputedStyle(el).pointerEvents,hit:hit?{tag:hit.tagName,id:hit.id}:null,clicks:window.__qaInnerClicks||0,events:window.__qaInnerPointerEvents||[]};});
+        const parent=await page.evaluate(child=>{const iframe=document.querySelector('iframe'),r=iframe.getBoundingClientRect(),point={x:r.x+iframe.clientLeft+child.rect.x+child.rect.width/2,y:r.y+iframe.clientTop+child.rect.y+child.rect.height/2};const hit=document.elementFromPoint(point.x,point.y),dialog=document.querySelector('#tront-theme-editor');return {time:performance.now(),scroll:{x:scrollX,y:scrollY},iframe:{x:r.x,y:r.y,width:r.width,height:r.height,pointerEvents:getComputedStyle(iframe).pointerEvents},point,hit:hit?{tag:hit.tagName,id:hit.id}:null,modal:dialog.matches(':modal'),expanded:document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')};},child);
+        result.snapshots.push({stage,parent,child});return {parent,child};
+      }
+      try{
+        await capture('before-scroll');await target.scrollIntoViewIfNeeded();await capture('after-scroll-before-paint');
+        const ticks=await Promise.all([
+          page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(a=>requestAnimationFrame(b=>resolve([a,b]))))),
+          target.evaluate(()=>new Promise(resolve=>requestAnimationFrame(a=>requestAnimationFrame(b=>resolve([a,b])))))
+        ]);result.animationFrameTicks={parent:ticks[0],child:ticks[1]};
+        const file=`punk-iframe-${label}-rendered.png`;await target.screenshot({path:path.join(options.output,file)});report.screenshots.push({file,position:'controlled iframe render barrier'});
+        const ready=await capture('after-render-before-first-click');assert.equal(ready.parent.modal,false);assert.equal(ready.parent.iframe.pointerEvents,'auto');assert.equal(ready.child.readyState,'complete');
+        const oldParentClicks=await page.evaluate(()=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').length);
+        result.clickAttempts++;await target.click({timeout:5000});
+        result.afterClick=await capture('after-first-normal-click');
+        assert.equal(result.afterClick.child.clicks,ready.child.clicks+1,'first normal click must reach the controlled child document: '+label);
+        await page.waitForFunction(before=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').length>before,oldParentClicks,{timeout:5000});
+        result.parentFrameClick=await page.evaluate(()=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').at(-1));assert.equal(result.parentFrameClick.modal,false);
+        return result;
+      }catch(error){result.error=error.message;result.state=await page.evaluate(interactionStateInPage);throw error;}
+      finally{(report.frameReadiness||=[]).push(result);save();}
+    }
+
     async function audit(page,label){const result=await page.evaluate(contrastAuditInPage);report.audits.push({label,...result});assert.deepEqual(result.failures,[],`${label}: ${JSON.stringify(result.failures.slice(0,12))}`);return {textCount:result.textCount,bound:result.bound};}
     async function overflow(page){return page.evaluate(()=>{
       const nav=document.querySelector('#magic-navbar-container'),rect=nav.getBoundingClientRect();
@@ -304,6 +332,11 @@ async function main(){
         }
         throw error;}finally{if(p&&!p.isClosed())report.interactions.push({test:'isolated-reset-final',state:await p.evaluate(interactionStateInPage)});await fresh.close();}
     });
+    if(options.project==='punk')await check('fresh pre-modal controlled iframe accepts its first rendered normal click',async()=>{
+      const fresh=await contextFor(current.origin,1440);
+      try{const p=await load(fresh,current.origin);return await clickRenderedFrame(p,'pre-modal-baseline');}
+      finally{await fresh.close();}
+    });
     if(options.project==='punk')await check('Punk modal contains iframe pointer input and restores it after Close and Escape',async()=>{
       const fresh=await contextFor(current.origin,1440);let p;const transitions=[];
       try{
@@ -317,13 +350,11 @@ async function main(){
         assert.deepEqual(await observe('native modal after Reset'),{label:'native modal after Reset',pointerEvents:'none',modal:true});
         await p.locator('[data-action="undo"]').click();assert.deepEqual(await stored(p),before);assert.equal(await p.getAttribute('html','data-te-project'),'custom');
         await close(p);assert.deepEqual(await observe('after Close'),{label:'after Close',pointerEvents:original,modal:false});
-        const oldFrameClicks=await p.evaluate(()=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').length);
-        // The controlled, inert provider frame still has the real cross-origin URL.
-        // This checks pointer restoration only; it does not verify YouTube playback.
-        await p.frameLocator('iframe').locator('p').click();
-        await p.waitForFunction(before=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').length>before,oldFrameClicks,{timeout:5000});
+        // Preserve the prior unsynchronized failure as evidence; a real rendered frame
+        // is now required before the one normal child click, with no retry or force.
+        const renderedFrame=await clickRenderedFrame(p,'after-close');
         assert.equal(await p.locator('#tront-theme-editor').evaluate(el=>el.matches(':modal')),false);
-        const frameClick=await p.evaluate(()=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').at(-1));assert.equal(frameClick.modal,false);
+        const frameClick=renderedFrame.parentFrameClick;assert.equal(frameClick.modal,false);
         await open(p);await p.selectOption('[name="preset"]','project-original');
         assert.deepEqual(await observe('native modal before Escape'),{label:'native modal before Escape',pointerEvents:'none',modal:true});
         const events=await p.evaluate(()=>window.__qaCloseEvents||0);await p.keyboard.press('Escape');await waitClosed(p,events);
