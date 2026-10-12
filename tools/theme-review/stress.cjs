@@ -55,6 +55,15 @@ function instrumentInteractionsInPage(){
   window.addEventListener('message',event=>{if(event.data?.__themeQA==='iframe-pointer'){window.__qaInteractionTrace.push({event:'iframe-'+event.data.type,phase:'iframe',time:performance.now(),iframeOrigin:event.origin,clientX:event.data.clientX,clientY:event.data.clientY,modal:dialog.matches(':modal'),dialogOpen:dialog.open});}});
   for(const type of ['pointerdown','pointerup','mousedown','mouseup','click','input','change','close','cancel','focusin'])document.addEventListener(type,event=>{if(['pointerdown','pointerup','mousedown','mouseup','click'].includes(event.type)||event.target===dialog||event.target?.closest?.('#tront-theme-editor,#tront-theme-btn')){entry(event,'capture');queueMicrotask(()=>entry(event,'settled'));}},true);
 }
+function frameIdentityInPage(){return {documentId:window.__qaDocumentId,timeOrigin:performance.timeOrigin,href:location.href,clicks:window.__qaInnerClicks||0};}
+function assertFrameIdentity(before,after,label,expectedClicks=before.clicks){
+  assert.ok(before.documentId,'Controlled iframe identity is present: '+label);
+  assert.equal(after.documentId,before.documentId,'No child document replacement: '+label);
+  assert.equal(after.timeOrigin,before.timeOrigin,'No iframe navigation/reload: '+label);
+  assert.equal(after.href,before.href,'Iframe URL is unchanged: '+label);
+  assert.equal(after.clicks,expectedClicks,'Child click counter survives without loss or extra clicks: '+label);
+}
+async function frameIdentity(page){return page.frameLocator('iframe').locator('body').evaluate(frameIdentityInPage);}
 async function main() {
   const options=argumentsFor();
   assert.equal(options.project,'punk','This focused cross-origin iframe sampler is Punk-only');
@@ -90,7 +99,7 @@ async function main() {
         const request=route.request(),url=new URL(request.url());
         if(url.origin===server.origin){await route.continue();return;}
         if(/(^|\.)youtube(?:-nocookie)?\.com$/.test(url.hostname)&&url.pathname.startsWith('/embed/')){
-          await route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><body style="margin:0;background:#111;color:#bbb;font:16px system-ui;display:grid;place-items:center;height:100vh"><p>QA: YouTube playback unverified (provider frame mocked)</p><script>window.__qaInnerClicks=0;window.__qaInnerPointerEvents=[];for(const type of ["pointerdown","pointerup","click"])document.addEventListener(type,e=>{if(e.type==="click")window.__qaInnerClicks++;window.__qaInnerPointerEvents.push({type:e.type,x:e.clientX,y:e.clientY,time:performance.now()});parent.postMessage({__themeQA:"iframe-pointer",type:e.type,clientX:e.clientX,clientY:e.clientY},"*");},true);</script></body></html>'});return;
+          await route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><body style="margin:0;background:#111;color:#bbb;font:16px system-ui;display:grid;place-items:center;height:100vh"><p>QA: YouTube playback unverified (provider frame mocked)</p><script>window.__qaDocumentId=String(performance.timeOrigin)+"-"+Math.random().toString(36).slice(2);window.__qaInnerClicks=0;window.__qaInnerPointerEvents=[];for(const type of ["pointerdown","pointerup","click"])document.addEventListener(type,e=>{if(e.type==="click")window.__qaInnerClicks++;window.__qaInnerPointerEvents.push({type:e.type,x:e.clientX,y:e.clientY,time:performance.now()});parent.postMessage({__themeQA:"iframe-pointer",type:e.type,clientX:e.clientX,clientY:e.clientY},"*");},true);</script></body></html>'});return;
         }
         const allowed=((url.hostname==='fonts.googleapis.com'&&request.resourceType()==='stylesheet')||(url.hostname==='fonts.gstatic.com'&&request.resourceType()==='font')||(['tront.xyz','blog.tront.xyz','hackerpunk.s3.amazonaws.com'].includes(url.hostname)&&request.resourceType()==='image')||(url.hostname==='tront.xyz'&&url.pathname==='/favicon.png'&&request.resourceType()==='other'));
         if(!allowed){report.warnings.push({type:'blocked-external-request',url:request.url(),resourceType:request.resourceType()});await route.abort('blockedbyclient');return;}
@@ -114,7 +123,7 @@ async function main() {
       row.actions.push({action:escape?'Escape':'Close',attempt:1});
       if(escape)await page.keyboard.press('Escape');else await page.locator('[data-action="close"]').click();
       await waitClosed(page,count);
-      assert.equal(await page.locator('iframe').evaluate(el=>getComputedStyle(el).pointerEvents),'auto','Closed editor restores iframe pointer input');
+      assert.equal(await page.locator('iframe').evaluate(el=>getComputedStyle(el).pointerEvents),'auto','Closed editor restores iframe pointer input');assert.equal(await page.locator('iframe').evaluate(el=>getComputedStyle(el).visibility),'visible','Closed editor restores iframe visibility');
     }
     async function frames(page) {
       const ticks=await Promise.all([
@@ -124,7 +133,7 @@ async function main() {
       return {parent:ticks[0],child:ticks[1]};
     }
     async function childState(page) {
-      return page.frameLocator('iframe').locator('p').evaluate(el=>{const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},readyState:document.readyState,visibility:document.visibilityState,pointerEvents:getComputedStyle(el).pointerEvents,hit:hit?{tag:hit.tagName,id:hit.id}:null,clicks:window.__qaInnerClicks||0,events:window.__qaInnerPointerEvents||[]};});
+      return page.frameLocator('iframe').locator('p').evaluate(el=>{const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {documentId:window.__qaDocumentId,timeOrigin:performance.timeOrigin,href:location.href,rect:{x:r.x,y:r.y,width:r.width,height:r.height},readyState:document.readyState,visibility:document.visibilityState,pointerEvents:getComputedStyle(el).pointerEvents,hit:hit?{tag:hit.tagName,id:hit.id}:null,clicks:window.__qaInnerClicks||0,events:window.__qaInnerPointerEvents||[]};});
     }
     async function restoreFrame(page,row,label) {
       row.phase=label;const result={label,clickAttempts:0};row.frames.push(result);
@@ -133,11 +142,11 @@ async function main() {
       await target.scrollIntoViewIfNeeded();result.ticks=await frames(page);
       result.screenshot=`${row.id}-${label}-rendered.png`;await target.screenshot({path:path.join(output,result.screenshot)});
       result.ready={geometry:await page.evaluate(resetHitTestInPage),child:await childState(page)};
-      assert.equal(result.ready.geometry.dialog.modal,false);assert.equal(result.ready.geometry.iframes[0].style.pointerEvents,'auto');assert.equal(result.ready.child.readyState,'complete');
+      assert.equal(result.ready.geometry.dialog.modal,false);assert.equal(result.ready.geometry.iframes[0].style.pointerEvents,'auto');assert.equal(result.ready.geometry.iframes[0].style.visibility,'visible');assert.equal(result.ready.child.readyState,'complete');assertFrameIdentity(row.initialFrame,result.ready.child,label+' before child click',row.expectedChildClicks);
       const oldMessages=await page.evaluate(()=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').length);
       row.actions.push({action:label+' child click',attempt:1});result.clickAttempts++;
       await target.click();result.after={geometry:await page.evaluate(resetHitTestInPage),child:await childState(page)};
-      assert.equal(result.after.child.clicks,result.ready.child.clicks+1,'Exactly one normal click reaches restored child: '+label);
+      assert.equal(result.after.child.clicks,result.ready.child.clicks+1,'Exactly one normal click reaches restored child: '+label);row.expectedChildClicks++;assertFrameIdentity(row.initialFrame,result.after.child,label+' after child click',row.expectedChildClicks);
       await page.waitForFunction(count=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').length>count,oldMessages);
       result.message=await page.evaluate(()=>(window.__qaInteractionTrace||[]).filter(event=>event.event==='iframe-click').at(-1));assert.equal(result.message.modal,false);
     }
@@ -155,10 +164,11 @@ async function main() {
         await page.evaluate(()=>document.getAnimations().forEach(animation=>{animation.pause();animation.currentTime=0;}));
         await page.evaluate(instrumentInteractionsInPage);
         assert.equal(await page.getAttribute('html','data-te-project'),'native');assert.equal(await stored(page),null,'Context must have fresh project storage');
+        row.initialFrame=await frameIdentity(page);row.expectedChildClicks=row.initialFrame.clicks;
         row.phase='prepare cyan custom state';await open(page,row);await page.selectOption('[name="preset"]','cyan');await close(page,row);await pause(25);
         const before=await stored(page);assert.equal(before.preset,'cyan');await open(page,row);
         row.beforeReset=await page.evaluate(resetHitTestInPage);
-        assert.equal(row.beforeReset.dialog.modal,true);assert.equal(row.beforeReset.iframes[0].style.pointerEvents,'none');
+        assert.equal(row.beforeReset.dialog.modal,true);assert.equal(row.beforeReset.iframes[0].style.pointerEvents,'none');assert.equal(row.beforeReset.iframes[0].style.visibility,'hidden');
         const point=row.beforeReset.reset.point,frameRect=row.beforeReset.iframes[0].rect;
         row.resetOverlapsFrame=point.x>=frameRect.x&&point.x<=frameRect.right&&point.y>=frameRect.y&&point.y<=frameRect.bottom;
         assert.equal(row.resetOverlapsFrame,true,'Sampler must exercise the Reset point overlapping the underlying iframe');
@@ -169,17 +179,19 @@ async function main() {
         }
         row.phase='first Reset';row.actions.push({action:'Reset',attempt:1});await page.locator('[data-action="reset"]').click();
         row.afterReset={state:await page.evaluate(interactionStateInPage),geometry:await page.evaluate(resetHitTestInPage)};
-        assert.equal(row.afterReset.state.project,'native','First normal Reset must immediately select native');assert.equal(await stored(page),null,'First normal Reset removes project storage');
-        assert.equal(await page.locator('[data-action="reset"]').evaluate(el=>el===document.activeElement),true,'Reset retains normal pointer focus');row.firstResetPassed=true;
+        assert.equal(row.afterReset.state.project,'native','First normal Reset must immediately select native');assert.equal(await stored(page),null,'First normal Reset removes project storage');assert.equal(row.afterReset.geometry.iframes[0].style.visibility,'hidden','Native Reset keeps modal iframe hidden');
+        assert.equal(await page.locator('[data-action="reset"]').evaluate(el=>el===document.activeElement),true,'Reset retains normal pointer focus');row.firstResetPassed=true;row.afterReset.frame=await frameIdentity(page);assertFrameIdentity(row.initialFrame,row.afterReset.frame,'first Reset',row.expectedChildClicks);
         row.phase='Undo';row.actions.push({action:'Undo',attempt:1});await page.locator('[data-action="undo"]').click();
         assert.deepEqual(await stored(page),before,'Undo restores exact custom state');assert.equal(await page.getAttribute('html','data-te-project'),'custom');
         assert.equal(await page.locator('[data-action="undo"]').evaluate(el=>el===document.activeElement),true,'Undo retains normal pointer focus');
+        row.afterUndoFrame=await frameIdentity(page);assertFrameIdentity(row.initialFrame,row.afterUndoFrame,'Undo',row.expectedChildClicks);
         row.phase='Close';await close(page,row);await restoreFrame(page,row,'after-close');
-        row.phase='reopen and real Escape';await open(page,row);assert.deepEqual(await stored(page),before);assert.equal(await page.locator('iframe').evaluate(el=>getComputedStyle(el).pointerEvents),'none');
+        row.phase='reopen and real Escape';await open(page,row);assert.deepEqual(await stored(page),before);assert.equal(await page.locator('iframe').evaluate(el=>getComputedStyle(el).pointerEvents),'none');assert.equal(await page.locator('iframe').evaluate(el=>getComputedStyle(el).visibility),'hidden');
         await close(page,row,true);await restoreFrame(page,row,'after-escape');
         row.phase='reopen after Escape';await open(page,row);assert.deepEqual(await stored(page),before);await close(page,row);
         assert.deepEqual(await page.evaluate(()=>['tront-theme','tront-theme-gallery-v1','tront-previews-paused'].map(key=>localStorage.getItem(key))),['sentinel-legacy','sentinel-gallery','sentinel-paused']);
         assert.deepEqual(row.pageErrors||[],[]);assert.deepEqual(row.localHttpErrors||[],[]);
+        row.finalFrame=await frameIdentity(page);assertFrameIdentity(row.initialFrame,row.finalFrame,'final reopen/Close',row.expectedChildClicks);
         row.phase='passed';row.finalState=await page.evaluate(interactionStateInPage);
       })();
       try {await bounded(scenario,Math.min(CASE_LIMIT_MS,Math.max(1,WORK_LIMIT_MS-(Date.now()-started))),item.id);row.pass=true;}
@@ -205,5 +217,5 @@ async function main() {
   }
   return report;
 }
-module.exports={PLAN,HARD_LIMIT_MS,WORK_LIMIT_MS,aggregate};
+module.exports={PLAN,HARD_LIMIT_MS,WORK_LIMIT_MS,aggregate,assertFrameIdentity};
 if(require.main===module)main().catch(error=>{console.error(error.stack);process.exitCode=1;});

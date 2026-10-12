@@ -37,8 +37,9 @@ html[data-tront-theme-surface="project"][data-te-project="custom"] .cta-button:i
 @media (prefers-reduced-motion: reduce) {
   html[data-tront-theme-surface="project"] { scroll-behavior: auto; }
 }
-/* Keep the embedded player inert while the native modal is open, including
-   cross-origin frame hit-testing that can otherwise intercept an editor click. */
+/* Hide only the embedded surface while the native modal covers the page.
+   Keep its layout and document intact; closing restores its original visibility. */
 html[data-tront-theme-surface="project"]:has(#tront-theme-editor:modal) .video-container iframe {
   pointer-events: none;
+  visibility: hidden;
 }
