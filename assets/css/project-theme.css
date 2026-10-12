@@ -1,0 +1,39 @@
+/* HackerPunk keeps its native neon composition until a palette is chosen. */
+html[data-tront-theme-surface="project"] #magic-navbar-container .nav-link > span { display: inline; }
+html[data-tront-theme-surface="project"][data-te-project="custom"] {
+  --color-bg: var(--te-bg); --color-bg-secondary: var(--te-panel);
+  --color-text: var(--te-ink); --color-text-muted: var(--te-muted);
+  --color-primary-neon: var(--te-accent); --color-secondary-neon: var(--te-secondary);
+  --color-accent-neon: var(--te-orange);
+}
+html[data-tront-theme-surface="project"][data-te-project="custom"] header {
+  background: linear-gradient(145deg, rgba(var(--project-ground-x-rgb), calc(var(--te-glow-opacity) * 5)), rgba(var(--project-panel-rgb), .4)),
+    radial-gradient(ellipse at top center, rgba(var(--project-panel-rgb), .6), rgba(var(--project-bg-rgb), .7) 85%);
+}
+html[data-tront-theme-surface="project"][data-te-project="custom"] header h1 { animation-name: project-text-flicker; }
+@keyframes project-text-flicker {
+  0%, 100% { text-shadow: 0 0 4px var(--color-accent-neon), 0 0 10px var(--color-primary-neon), 0 0 20px var(--color-primary-neon); }
+  50% { text-shadow: 0 0 4px var(--color-accent-neon), 0 0 8px var(--color-primary-neon); }
+}
+html[data-tront-theme-surface="project"][data-te-project="custom"] .cta-button,
+html[data-tront-theme-surface="project"][data-te-project="custom"] .cta-button:is(:hover, :focus) {
+  background: var(--te-button); color: var(--te-ink); text-shadow: none;
+}
+html[data-tront-theme-surface="project"][data-te-project="custom"] .feature-card { background-color: var(--te-panel-fill); }
+html[data-tront-theme-surface="project"][data-te-project="custom"] .feature-card:hover { background-color: var(--te-hover); }
+html[data-tront-theme-surface="project"][data-te-project="custom"] footer { background: rgba(var(--project-bg-rgb), .5); }
+html[data-tront-theme-surface="project"][data-te-project="custom"] footer p { color: var(--te-muted); }
+html[data-tront-theme-surface="project"][data-te-project="custom"] :is(a, .feature-card) { transition-property: transform, box-shadow; }
+/* Keep scanline and inset-glow shapes while bounding customized text grounds. */
+html[data-tront-theme-surface="project"][data-te-project="custom"] header::after {
+  background-image: repeating-linear-gradient(transparent, transparent 2px, rgba(var(--project-bg-rgb), .15) 3px, rgba(var(--project-bg-rgb), .15) 4px);
+}
+html[data-tront-theme-surface="project"][data-te-project="custom"] .cta-button {
+  box-shadow: 0 0 15px var(--color-accent-neon), inset 0 0 8px var(--te-elem);
+}
+html[data-tront-theme-surface="project"][data-te-project="custom"] .cta-button:is(:hover, :focus) {
+  box-shadow: 0 0 25px var(--color-accent-neon), 0 0 40px var(--color-primary-neon), inset 0 0 10px var(--te-hover);
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-tront-theme-surface="project"] { scroll-behavior: auto; }
+}

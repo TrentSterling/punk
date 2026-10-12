@@ -1,0 +1,284 @@
+--- a/assets/js/tront-theme-editor.js
++++ b/assets/js/tront-theme-editor.js
+@@ -1,5 +1,8 @@
+ /*
+- * Opt-in theme editor. Gallery keeps its original look until a new palette is chosen.
++ * Opt-in theme editor. Gallery and configured projects retain their original
++ * appearance until a new palette is chosen. Project-local derivative of
++ * TrentSterling/trentsterling.github.io@91d0a6874fbb4769d546574870e25c406a81608d.
++ * See tools/project-theme/README.md and vendor-manifest.json for provenance.
+  * Reuses the palette and color helpers in tront-system.js without changing its
+  * shared engine. Never writes the legacy tront-theme / gallery preference keys.
+  *
+@@ -15,7 +18,38 @@
+     if (!T) return;
+     var doc = root.document;
+     var gallery = !!(doc && doc.documentElement.getAttribute('data-tront-theme-surface') === 'gallery');
+-    var KEY = gallery ? 'tront-theme-gallery-v1' : 'tront-theme-editor-v1';
++    var projectSurface = !!(doc && doc.documentElement.getAttribute('data-tront-theme-surface') === 'project');
++    function validOriginal(value) {
++        return value && typeof value === 'object' && !Array.isArray(value) &&
++            ['dark', 'light'].indexOf(value.mode) !== -1 &&
++            [['angle', 0, 360], ['intensity', 0, 100], ['frost', 75, 100]].every(function (range) {
++                return Number.isFinite(value[range[0]]) && value[range[0]] >= range[1] && value[range[0]] <= range[2];
++            }) && Array.isArray(value.pegs) && value.pegs.length === 4 && value.pegs.every(function (peg) {
++                return peg && typeof peg.color === 'string' && /^#[0-9a-f]{6}$/i.test(peg.color) &&
++                    T.hexToRgb(peg.color) && Number.isFinite(peg.position) && peg.position >= 0 && peg.position <= 100;
++            });
++    }
++    function projectConfig(value) {
++        if (!value || typeof value !== 'object' || ['punk', 'monke'].indexOf(value.id) === -1 ||
++            value.storageKey !== 'tront-theme-' + value.id + '-v1' ||
++            typeof value.nativeLabel !== 'string' || !value.nativeLabel.trim() || value.nativeLabel.length > 80 ||
++            !validOriginal(value.original)) return null;
++        return { id: value.id, storageKey: value.storageKey, nativeLabel: value.nativeLabel.trim(),
++            original: { mode: value.original.mode, angle: Math.round(value.original.angle),
++                intensity: Math.round(value.original.intensity), frost: Math.round(value.original.frost),
++                pegs: value.original.pegs.map(function (peg) {
++                    return { color: T.toHex(T.hexToRgb(peg.color)), position: Math.round(peg.position) };
++                }) } };
++    }
++    var project = projectSurface ? projectConfig(root.TrontThemeProject) : null;
++    // A bad configuration must not opt the page into an unrelated default or key.
++    if (projectSurface && !project) return;
++    var KEY = project ? project.storageKey : gallery ? 'tront-theme-gallery-v1' : 'tront-theme-editor-v1';
++    function originalProject() {
++        var original = clone(project.original);
++        original.version = 1; original.preset = 'project-original'; original.count = 4;
++        return original;
++    }
+     var PRESETS = [
+         { id: 'dark', name: 'Midnight', mode: 'dark', colors: ['#64748b', '#334155', '#171d2e', '#655783'] },
+         { id: 'cyan', name: 'Cyan', mode: 'dark', colors: ['#56ccff', '#1871b8', '#2dd4bf', '#99f6e4'] },
+@@ -37,6 +71,7 @@
+     function normalize(value) {
+         var fallback = preset('dark');
+         if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
++        if (project && value.preset === 'project-original') return originalProject();
+         return {
+             version: 1,
+             preset: value.preset === 'gallery-original' || PRESETS.some(function (p) { return p.id === value.preset; }) ? value.preset : 'custom',
+@@ -151,6 +186,7 @@
+ 
+     if (!doc || !doc.documentElement.hasAttribute('data-tront-theme-editor')) return;
+     var html = doc.documentElement;
++    var nativeColorScheme = html.style.colorScheme || '';
+     var storageAvailable = true, legacyGallery = 'dark', galleryCards = [];
+     function originalGallery() {
+         var original = fromLegacy(legacyGallery);
+@@ -162,25 +198,33 @@
+     }
+     function readStored() {
+         try {
+-            legacyGallery = root.localStorage.getItem('tront-theme') || 'dark';
++            if (!project) legacyGallery = root.localStorage.getItem('tront-theme') || 'dark';
+             var saved = root.localStorage.getItem(KEY);
+             if (saved) {
+-                try { var parsed = JSON.parse(saved); if (parsed && parsed.version === 1) return normalize(parsed); } catch (_) { /* Fall back to the prior choice. */ }
++                try {
++                    var parsed = JSON.parse(saved);
++                    if (parsed && parsed.version === 1 && (!project ||
++                        (parsed.count === 4 && validOriginal(parsed) && parsed.preset !== 'gallery-original'))) return normalize(parsed);
++                } catch (_) { /* Fall back to the prior choice. */ }
+             }
+-            return gallery ? originalGallery() : fromLegacy(legacyGallery);
+-        } catch (_) { storageAvailable = false; return gallery ? originalGallery() : preset('dark'); }
++            return project ? originalProject() : gallery ? originalGallery() : fromLegacy(legacyGallery);
++        } catch (_) { storageAvailable = false; return project ? originalProject() : gallery ? originalGallery() : preset('dark'); }
+     }
+     var state = readStored(), history = [], draftStart = null, dialog, opener, status, currentTokens;
+     function apply() {
+         currentTokens = buildTokens(state);
+         Object.keys(currentTokens.vars).forEach(function (key) { html.style.setProperty(key, currentTokens.vars[key]); });
+         html.setAttribute('data-te-mode', state.mode);
+-        html.style.colorScheme = state.mode;
++        var nativeProject = project && state.preset === 'project-original';
++        if (project) html.setAttribute('data-te-project', nativeProject ? 'native' : 'custom');
++        html.style.colorScheme = nativeProject ? nativeColorScheme : state.mode;
+         // Reading the original gallery choice never rewrites its old preference.
+         var nativeGallery = gallery && state.preset === 'gallery-original';
+         if (gallery) html.setAttribute('data-te-gallery', nativeGallery ? 'native' : 'custom');
+-        if (nativeGallery && legacyGallery !== 'dark') html.setAttribute('data-theme', legacyGallery);
+-        else html.removeAttribute('data-theme');
++        if (!project) {
++            if (nativeGallery && legacyGallery !== 'dark') html.setAttribute('data-theme', legacyGallery);
++            else html.removeAttribute('data-theme');
++        }
+         galleryCards.forEach(function (card) {
+             var accent = readable(card.color, currentTokens.bound, currentTokens.colors.ink);
+             card.element.style.setProperty('--te-card-accent', T.toHex(accent));
+@@ -188,7 +232,12 @@
+         if (html.getAttribute('data-tront-theme-surface') === 'blog') html.setAttribute('data-mode', state.mode);
+     }
+     function save() {
+-        try { root.localStorage.setItem(KEY, JSON.stringify(state)); storageAvailable = true; }
++        try {
++            // Native reset removes only this project's choice, never other preferences.
++            if (project && state.preset === 'project-original') root.localStorage.removeItem(KEY);
++            else root.localStorage.setItem(KEY, JSON.stringify(state));
++            storageAvailable = true;
++        }
+         catch (_) { storageAvailable = false; }
+     }
+     function remember(previous) {
+@@ -203,7 +252,7 @@
+         apply(); save(); sync();
+     }
+     function announce() {
+-        if (status) status.textContent = storageAvailable ? (gallery ? 'Games keeps its radial background. Choices save in this browser.' : 'Choices save in this browser.') : 'Preview only. Browser storage is unavailable.';
++        if (status) status.textContent = storageAvailable ? (project ? 'Choices save only on this site in this browser.' : gallery ? 'Games keeps its radial background. Choices save in this browser.' : 'Choices save in this browser.') : 'Preview only. Browser storage is unavailable.';
+     }
+     function sync() {
+         if (!dialog) return;
+@@ -234,7 +283,7 @@
+         dialog.className = 'te-dialog';
+         dialog.setAttribute('aria-labelledby', 'te-title');
+         dialog.innerHTML = '<div class="te-heading"><div><h2 id="te-title">Theme</h2></div><button type="button" class="te-close" data-action="close" aria-label="Close theme editor">×</button></div>' +
+-            '<div class="te-presets"><label for="te-preset">Palette</label><select id="te-preset" name="preset">' + PRESETS.map(function (p) { return '<option value="' + p.id + '">' + p.name + '</option>'; }).join('') + (gallery ? '<option value="gallery-original">Original gallery</option>' : '') + '<option value="custom" disabled>Custom</option></select><button type="button" data-action="magic">ColorMagic</button></div>' +
++            '<div class="te-presets"><label for="te-preset">Palette</label><select id="te-preset" name="preset">' + PRESETS.map(function (p) { return '<option value="' + p.id + '">' + p.name + '</option>'; }).join('') + (project ? '<option value="project-original">' + project.nativeLabel.replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }) + '</option>' : gallery ? '<option value="gallery-original">Original gallery</option>' : '') + '<option value="custom" disabled>Custom</option></select><button type="button" data-action="magic">ColorMagic</button></div>' +
+             '<fieldset class="te-mode"><legend>Appearance</legend><label><input type="radio" name="mode" value="dark"> Dark</label><label><input type="radio" name="mode" value="light"> Light</label></fieldset>' +
+             '<div class="te-preview" role="img" aria-label="Your selected gradient colors"></div>' +
+             '<section class="te-details" aria-labelledby="te-gradient-title"><h3 id="te-gradient-title">Gradient</h3><div class="te-tuning">' +
+@@ -292,7 +341,7 @@
+             if (!action) return;
+             if (action.dataset.action === 'close') dialog.close();
+             if (action.dataset.action === 'magic') commit(colorMagic(state));
+-            if (action.dataset.action === 'reset') commit(gallery ? originalGallery() : preset('dark'));
++            if (action.dataset.action === 'reset') commit(project ? originalProject() : gallery ? originalGallery() : preset('dark'));
+             if (action.dataset.action === 'undo' && history.length) {
+                 state = history.pop(); draftStart = null; apply(); save(); sync();
+             }
+@@ -311,13 +360,13 @@
+         dialog.addEventListener('input', function (event) { updateInput(event.target); });
+         dialog.addEventListener('change', function (event) {
+             var input = event.target;
+-            if (input.name === 'preset') { commit(input.value === 'gallery-original' && gallery ? originalGallery() : preset(input.value)); return; }
++            if (input.name === 'preset') { commit(input.value === 'project-original' && project ? originalProject() : input.value === 'gallery-original' && gallery ? originalGallery() : preset(input.value)); return; }
+             if (input.name === 'mode') { var next = clone(state); next.mode = input.value; next.preset = 'custom'; commit(next); return; }
+             updateInput(input);
+             if (draftStart) { remember(draftStart); draftStart = null; sync(); }
+         });
+         root.addEventListener('storage', function (event) {
+-            if (event.key !== KEY) return;
++            if (event.key !== KEY && !(project && event.key === null)) return;
+             state = readStored(); history = []; draftStart = null; apply(); sync();
+         });
+         sync();
+--- a/assets/css/tront-theme-editor.css
++++ b/assets/css/tront-theme-editor.css
+@@ -1,4 +1,6 @@
+-/* Shared editor, with separate page and gallery presentation layers. */
++/* Project-local derivative of shared editor @91d0a6874fbb4769d546574870e25c406a81608d.
++   Project surfaces use their own gated adapters; dialog and primary nav stay shared.
++   See tools/project-theme/README.md and vendor-manifest.json. */
+ html[data-tront-theme-editor] {
+     --te-bg: #0f1218;
+     --te-panel: #171c25;
+@@ -16,7 +18,7 @@
+     --te-grid-x: #263447;
+     --te-grid-y: #2a2e48;
+ }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]),
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]),
+ html[data-tront-theme-editor][data-te-gallery="custom"] {
+     --bg-color: var(--te-bg);
+     --surface-color: var(--te-panel-fill);
+@@ -37,7 +39,7 @@
+     --status-dnd: var(--te-red, var(--te-ink));
+     color-scheme: dark;
+ }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) body {
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) body {
+     color: var(--te-ink);
+     background-color: var(--te-bg);
+     background-image: var(--te-wash);
+@@ -47,36 +49,36 @@
+     opacity: 1;
+     visibility: visible;
+ }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(h1, h2, h3, .full-username, .username) { color: var(--te-ink); }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(header p, .blurb, footer, .widget-loading, .widget-description, .section-header, .user-status, .channel-list li, .dev-topic-list li) { color: var(--te-muted); }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(a, .about-me h3, .widget-header, .widget-description a, .online-count, .online-label) { color: var(--te-accent); }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) a:hover { color: var(--te-ink); }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .about-me a { border-color: var(--te-line); }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .widget-header svg { fill: currentColor; }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(.discord-widget, .discord-preview-container, .channel-list-container, .dev-topic-list li) {
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(h1, h2, h3, .full-username, .username) { color: var(--te-ink); }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(header p, .blurb, footer, .widget-loading, .widget-description, .section-header, .user-status, .channel-list li, .dev-topic-list li) { color: var(--te-muted); }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(a, .about-me h3, .widget-header, .widget-description a, .online-count, .online-label) { color: var(--te-accent); }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) a:hover { color: var(--te-ink); }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .about-me a { border-color: var(--te-line); }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .widget-header svg { fill: currentColor; }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(.discord-widget, .discord-preview-container, .channel-list-container, .dev-topic-list li) {
+     background: var(--te-panel-fill);
+     border-color: var(--te-line);
+     backdrop-filter: blur(var(--te-blur));
+     -webkit-backdrop-filter: blur(var(--te-blur));
+ }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(.user-card, .roles-list li, .hover-card, .discord-widget .online-text) {
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(.user-card, .roles-list li, .hover-card, .discord-widget .online-text) {
+     background: var(--te-elem);
+     color: var(--te-ink);
+     border-color: var(--te-line);
+ }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(.user-card, .hover-card, .about-me a) { transition: transform .16s ease; }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .user-card:not(.user-card--more):hover { background: var(--te-hover); }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .discord-widget .online-text { border-radius: 6px; padding: .25rem .5rem; }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .discord-widget :is(.online-label, .online-count) { text-shadow: none; }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .discord-widget .avatar-wrapper { background: var(--te-panel); }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .links a {
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(.user-card, .hover-card, .about-me a) { transition: transform .16s ease; }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .user-card:not(.user-card--more):hover { background: var(--te-hover); }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .discord-widget .online-text { border-radius: 6px; padding: .25rem .5rem; }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .discord-widget :is(.online-label, .online-count) { text-shadow: none; }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .discord-widget .avatar-wrapper { background: var(--te-panel); }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .links a {
+     background: var(--te-panel-fill);
+     color: var(--te-accent);
+     border: 1px solid var(--te-line);
+ }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .links a { transition: transform .16s ease; }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .links a:hover { background: var(--te-hover); color: var(--te-ink); }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(.cta-button, .discord-widget .join-button) {
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .links a { transition: transform .16s ease; }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .links a:hover { background: var(--te-hover); color: var(--te-ink); }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(.cta-button, .discord-widget .join-button) {
+     background: var(--te-button);
+     color: var(--te-ink);
+     border: 1px solid var(--te-accent);
+@@ -84,7 +86,7 @@
+     animation: none;
+     transition: transform .16s ease, box-shadow .16s ease;
+ }
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(.cta-button, .discord-widget .join-button):hover { color: var(--te-ink); }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(.cta-button, .discord-widget .join-button):hover { color: var(--te-ink); }
+ html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) #magic-navbar-container {
+     /* Fixed navigation can pass over avatars; keep its text ground opaque. */
+     background: var(--te-panel);
+@@ -176,12 +178,12 @@
+     html[data-tront-theme-editor]:not([data-te-gallery="native"]) #magic-navbar-container .nav-link { padding: 0 9px; font-size: 12px; min-width: 0; height: 40px; }
+     html[data-tront-theme-editor]:not([data-te-gallery="native"]) #magic-navbar-container .home-link { padding-left: 6px; }
+     html[data-tront-theme-editor]:not([data-te-gallery="native"]) #magic-navbar-container .logo-image { width: 24px; height: 24px; margin-right: 5px; }
+-    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .main-container { padding-inline: 16px; }
+-    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .dev-topic-list { grid-template-columns: minmax(0, 1fr); }
+-    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .discord-preview-container { padding: 16px; }
+-    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .discord-preview-header { gap: 12px; flex-wrap: wrap; }
+-    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .discord-grid { grid-template-columns: minmax(0, 1fr); }
+-    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) .channel-list-container { padding: 18px; }
++    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .main-container { padding-inline: 16px; }
++    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .dev-topic-list { grid-template-columns: minmax(0, 1fr); }
++    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .discord-preview-container { padding: 16px; }
++    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .discord-preview-header { gap: 12px; flex-wrap: wrap; }
++    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .discord-grid { grid-template-columns: minmax(0, 1fr); }
++    html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) .channel-list-container { padding: 18px; }
+ }
+ @media (max-width: 360px) {
+     html[data-tront-theme-editor]:not([data-te-gallery="native"]) #magic-navbar-container .nav-link { padding-inline: 7px; }
+@@ -237,5 +239,5 @@
+ html[data-tront-theme-surface="gallery"][data-te-gallery="custom"] .filter-nav label { transition: transform .16s ease; }
+ 
+ /* Button-style links stay buttons on hover/focus; prose links keep their cues. */
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(.cta-button, .join-button, .links a),
+-html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]) :is(.cta-button, .join-button, .links a):is(:hover, :focus, :active, :visited) { text-decoration: none; }
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(.cta-button, .join-button, .links a),
++html[data-tront-theme-editor]:not([data-tront-theme-surface="gallery"]):not([data-tront-theme-surface="project"]) :is(.cta-button, .join-button, .links a):is(:hover, :focus, :active, :visited) { text-decoration: none; }
