@@ -41,7 +41,8 @@ function protocolCollector(emit){
       const marker=JSON.parse(line.slice('MODAL_ROUTING_ACTION '.length));
       emit({kind:'action',...marker,observedWallMs:Date.now()});action=marker.boundary==='begin'?marker:null;return;
     }
-    const match=/pw:protocol\s+(SEND|RECV)\s+[^\{]*(\{.*\})\s*$/.exec(line);if(!match)return;
+    // Pinned Playwright 1.62 helper.ts emits SEND ► and ◀ RECV.
+    const match=/pw:protocol\s+(?:◀\s+)?(SEND|RECV)\s+[^\{]*(\{.*\})\s*$/.exec(line);if(!match)return;
     // Avoid parsing large evaluate/screenshot replies unrelated to input.
     const id=/^\{"id":(\d+)/.exec(match[2]);
     if(!match[2].includes('"method":"Input.dispatchMouseEvent"')&&(!id||![...pending.values()].some(r=>r.id===Number(id[1]))))return;

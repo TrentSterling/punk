@@ -43,7 +43,8 @@ test('actual CDP send/ack parser preserves action identity and coordinates',()=>
   const rows=[],collect=protocolCollector(r=>rows.push(r));
   collect('MODAL_ROUTING_ACTION '+JSON.stringify({boundary:'begin',caseId:'app-cross-immediate-1',action:'reopened Reset',workerWallMs:123}));
   collect('2026-10-13T06:00:00.000Z pw:protocol SEND ► '+JSON.stringify({id:12,method:'Input.dispatchMouseEvent',params:{type:'mousePressed',x:621.21,y:793,button:'left',clickCount:1},sessionId:'s'}));
-  collect('2026-10-13T06:00:00.001Z pw:protocol RECV ◀ '+JSON.stringify({id:12,result:{},sessionId:'s'}));
+  // Exact direction formatting in pinned Playwright v1.62.0 helper.ts.
+  collect('2026-10-13T06:00:00.001Z pw:protocol ◀ RECV '+JSON.stringify({id:12,result:{},sessionId:'s'}));
   collect('MODAL_ROUTING_ACTION '+JSON.stringify({boundary:'end',caseId:'app-cross-immediate-1',action:'reopened Reset'}));
   collect('2026-10-13T06:00:00.002Z pw:protocol SEND ► '+JSON.stringify({id:13,method:'Runtime.evaluate',params:{expression:'1'}}));
   assert.equal(rows.length,4);assert.equal(rows[1].params.x,621.21);assert.equal(rows[1].params.y,793);assert.equal(rows[1].action.action,'reopened Reset');assert.equal(rows[2].direction,'ack');

@@ -62,20 +62,16 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 7
-  modal-routing-diagnostic:
-    name: Modal routing (${{ matrix.mode }})
+  native-pointer-diagnostic:
+    name: Native pointer routing
     runs-on: ubuntu-24.04
     timeout-minutes: 8
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        mode: [headless, headed]
     env:
       PROJECT_ID: punk
       PROJECT_BASELINE_ROOT: ${{ github.workspace }}/.local/baseline
       PROJECT_SCREENSHOTS: ${{ github.workspace }}/.local/theme-review
       THEME_BROWSER_EXECUTABLE: /opt/google/chrome/chrome
+      THEME_NATIVE_POINTER_DISPLAY_ISOLATED: '1'
     steps:
       - name: Read exact diagnostic head
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
@@ -92,27 +88,25 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Check diagnostic boundaries
-        run: node --test tools/theme-review/modal-routing.test.cjs
-      - name: Install existing pinned tooling and official Chrome
+      - name: Check diagnostic boundaries and exact input accounting
+        run: node --test tools/theme-review/modal-routing.test.cjs tools/theme-review/native-pointer.test.cjs tools/theme-review/native-routing.test.cjs
+      - name: Install pinned tooling, official Chrome, and Ubuntu XTEST helper
         run: |
           npm install --prefix "$RUNNER_TEMP/project-tests" --no-save --package-lock=false --ignore-scripts playwright@1.62.0
           node "$RUNNER_TEMP/project-tests/node_modules/playwright/cli.js" install --with-deps chrome
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y xdotool
           echo "NODE_PATH=$RUNNER_TEMP/project-tests/node_modules" >> "$GITHUB_ENV"
-      - name: Compare headless routing
-        if: ${{ matrix.mode == 'headless' }}
-        run: timeout 240s node tools/theme-review/modal-routing.cjs --browser-mode headless
-      - name: Compare headed routing on an isolated display
-        if: ${{ matrix.mode == 'headed' }}
+      - name: Exercise single native pointer activations on an isolated display
         run: |
           command -v xvfb-run
-          timeout 240s xvfb-run -a --server-args="-screen 0 1920x1200x24" node tools/theme-review/modal-routing.cjs --browser-mode headed
-      - name: Retain local public-page diagnostic evidence
+          timeout 240s xvfb-run -a --server-args="-screen 0 1920x1200x24" node tools/theme-review/native-routing.cjs
+      - name: Retain local public-page native-input evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: punk-modal-routing-${{ matrix.mode }}-${{ github.event.pull_request.number }}
-          path: .local/theme-review/modal-routing-${{ matrix.mode }}/**
+          name: punk-native-routing-${{ github.event.pull_request.number }}
+          path: .local/theme-review/native-routing/**
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 3
