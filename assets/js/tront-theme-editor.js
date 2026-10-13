@@ -313,6 +313,34 @@
         opener.setAttribute('aria-expanded', 'false');
         var dialogSessionOpen = false;
         var readingPosition = null;
+        var presentation = 0;
+        var main = inlineEditor && doc.querySelector ? doc.querySelector('main') : null;
+        var mainWasInert = main ? main.inert : false;
+        function afterPaint(callback) {
+            root.requestAnimationFrame(function () { root.requestAnimationFrame(callback); });
+        }
+        function setBusy(busy) {
+            dialog.inert = busy;
+            dialog.setAttribute('aria-busy', String(busy));
+            opener.setAttribute('aria-busy', String(busy));
+            if (main) main.inert = busy || mainWasInert;
+        }
+        function present(token, opened, started) {
+            // First present the layout, then present the restored page input
+            // state. Controls are exposed only after those two paint boundaries.
+            afterPaint(function () {
+                if (token !== presentation || dialog.open !== opened) return;
+                if (main) main.inert = mainWasInert;
+                afterPaint(function () {
+                    if (token !== presentation || dialog.open !== opened) return;
+                    setBusy(false);
+                    dialog.setAttribute('data-te-phase', opened ? 'ready' : 'closed');
+                    dialog.setAttribute('data-te-transition-ms', String(Date.now() - started));
+                    if (opened) dialog.querySelector('[data-action="close"]').focus({ preventScroll: true });
+                    else if (doc.activeElement === opener || doc.activeElement === doc.body || dialog.contains && dialog.contains(doc.activeElement)) opener.focus({ preventScroll: true });
+                });
+            });
+        }
         function finishClose() {
             // Native close events are queued. An older event must never alter a
             // reopened dialog, split its draft, or steal focus from a later action.
@@ -329,11 +357,17 @@
         }
         function closeEditor() {
             if (!dialog.open) return;
+            var token, started;
+            if (inlineEditor) {
+                token = ++presentation; started = Date.now(); setBusy(true);
+                dialog.setAttribute('data-te-phase', 'closing');
+            }
             dialog.close();
             // Our close button/backdrop updates are synchronous; native Escape
             // still uses the browser's close event and its default behavior.
             finishClose();
-            if (!dialog.open) opener.focus({ preventScroll: true });
+            if (inlineEditor) present(token, false, started);
+            else if (!dialog.open) opener.focus({ preventScroll: true });
         }
         opener.addEventListener('click', function () {
             if (dialog.open) return;
@@ -341,12 +375,18 @@
             finishClose();
             if (inlineEditor) {
                 readingPosition = { x: root.scrollX, y: root.scrollY };
+                var token = ++presentation, started = Date.now();
+                setBusy(true); dialog.setAttribute('data-te-phase', 'opening');
                 dialog.show();
                 root.scrollTo({ left: 0, top: 0, behavior: 'instant' });
             } else dialog.showModal();
             dialogSessionOpen = true;
             opener.setAttribute('aria-expanded', 'true');
-            dialog.querySelector('[data-action="close"]').focus({ preventScroll: true });
+            if (inlineEditor) present(token, true, started);
+            else dialog.querySelector('[data-action="close"]').focus({ preventScroll: true });
+        });
+        opener.addEventListener('keydown', function (event) {
+            if (inlineEditor && dialog.open && event.key === 'Escape') { event.preventDefault(); closeEditor(); }
         });
         dialog.addEventListener('close', finishClose);
         // Keep sequential keyboard navigation inside the editor even when a

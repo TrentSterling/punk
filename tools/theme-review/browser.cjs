@@ -182,13 +182,13 @@ async function main(){
     }
     async function open(page){
       if(!await page.locator('#tront-theme-editor').evaluate(el=>el.open)){
-        await page.waitForFunction(()=>document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='false',null,{timeout:5000});
+        await page.waitForFunction(()=>document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='false'&&document.querySelector('#tront-theme-btn').getAttribute('aria-busy')!=='true',null,{timeout:5000});
         await page.locator('#tront-theme-btn').click();
       }
-      await page.waitForFunction(()=>document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='true',null,{timeout:5000});
+      await page.waitForFunction(()=>document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='true'&&document.querySelector('#tront-theme-btn').getAttribute('aria-busy')!=='true',null,{timeout:5000});
     }
     async function waitClosed(page,previousCount=null){
-      await page.waitForFunction(previousCount=>!document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='false'&&document.activeElement===document.querySelector('#tront-theme-btn')&&(previousCount===null||(window.__qaCloseEvents||0)>previousCount),previousCount,{timeout:5000});
+      await page.waitForFunction(previousCount=>!document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='false'&&document.querySelector('#tront-theme-btn').getAttribute('aria-busy')!=='true'&&document.activeElement===document.querySelector('#tront-theme-btn')&&(previousCount===null||(window.__qaCloseEvents||0)>previousCount),previousCount,{timeout:5000});
     }
     async function close(page){
       await page.evaluate(instrumentInteractionsInPage);
@@ -207,7 +207,7 @@ async function main(){
         result.snapshots.push({stage,parent,child});return {parent,child};
       }
       try{
-        await capture('before-scroll');await target.scrollIntoViewIfNeeded();await capture('after-scroll-before-paint');
+        await capture('before-scroll');await page.locator('iframe').scrollIntoViewIfNeeded();await target.scrollIntoViewIfNeeded();await capture('after-scroll-before-paint');
         const ticks=await Promise.all([
           page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(a=>requestAnimationFrame(b=>resolve([a,b]))))),
           target.evaluate(()=>new Promise(resolve=>requestAnimationFrame(a=>requestAnimationFrame(b=>resolve([a,b])))))
@@ -299,11 +299,30 @@ async function main(){
       const escapeCloseCount=await page.evaluate(()=>window.__qaCloseEvents||0);await page.keyboard.press('Escape');await waitClosed(page,escapeCloseCount);assert.equal(await page.locator('#tront-theme-editor').evaluate(el=>el.open),false);assert.equal(await page.locator('#tront-theme-btn').evaluate(el=>el===document.activeElement),true);
       for(let i=0;i<3;i++){await open(page);await close(page);}assert.equal(await page.locator('#tront-theme-btn').getAttribute('aria-expanded'),'false');
     });
+    if(options.project==='punk')await check('busy opening and closing absorb repeated activation before the first available control',async()=>{
+      const fresh=await contextFor(current.origin,1440);let p;
+      try {
+        p=await load(fresh,current.origin);
+        await p.evaluate(()=>{scrollTo({top:document.querySelector('iframe').getBoundingClientRect().top+scrollY-84,behavior:'instant'});window.__phaseClicks=[];document.addEventListener('click',e=>{if(e.target.closest('#tront-theme-btn,[data-action="close"]'))window.__phaseClicks.push({target:e.target.closest('[data-action]')?.dataset.action||'opener',phase:document.querySelector('dialog').getAttribute('data-te-phase'),inert:document.querySelector('dialog').inert,busy:document.querySelector('#tront-theme-btn').getAttribute('aria-busy')});});});
+        const child=p.frameLocator('iframe').locator('body');const clicks=await child.evaluate(()=>window.__qaInnerClicks||0);
+        await p.locator('#tront-theme-btn').dblclick({delay:0});await open(p);
+        const opening=await p.evaluate(()=>window.__phaseClicks);assert.ok(opening.filter(x=>x.target==='opener'&&x.phase==='opening'&&x.inert&&x.busy==='true').length>=2,'both repeated opener clicks occur during real busy UI');
+        assert.equal(await child.evaluate(()=>window.__qaInnerClicks||0),clicks);
+        const openingMs=await p.locator('dialog').getAttribute('data-te-transition-ms');
+        await p.selectOption('[name="preset"]','cyan');
+        await p.locator('[data-action="reset"]').click();assert.equal(await stored(p),null);
+        const count=await p.evaluate(()=>window.__qaCloseEvents||0);
+        await p.locator('[data-action="close"]').dblclick({delay:0});await waitClosed(p,count);
+        assert.equal(await child.evaluate(()=>window.__qaInnerClicks||0),clicks,'repeat Close cannot activate the underlying player');
+        const closingMs=await p.locator('dialog').getAttribute('data-te-transition-ms');
+        return {opening,openingMs:Number(openingMs),closingMs:Number(closingMs),singleFirstAvailableReset:true};
+      }finally{await fresh.close();}
+    });
     await check('rapid same-task close/reopen ignores stale native close events',async()=>{
       for(const method of ['button','native']){
         await open(page);const closeEvents=await page.evaluate(()=>window.__qaCloseEvents||0);
         await page.evaluate(method=>{const dialog=document.querySelector('#tront-theme-editor');if(method==='button')dialog.querySelector('[data-action="close"]').click();else dialog.close();document.querySelector('#tront-theme-btn').click();},method);
-        await page.waitForFunction(count=>(window.__qaCloseEvents||0)>count,closeEvents,{timeout:5000});
+        await page.waitForFunction(count=>(window.__qaCloseEvents||0)>count&&document.querySelector('#tront-theme-btn').getAttribute('aria-busy')!=='true',closeEvents,{timeout:5000});
         const state=await page.evaluate(interactionStateInPage);report.interactions.push({test:'rapid-close-reopen',method,state});
         assert.equal(state.dialogOpen,true);assert.equal(state.expanded,'true');assert.equal(state.active.action,'close');
         await close(page);

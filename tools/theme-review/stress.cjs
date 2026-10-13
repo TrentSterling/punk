@@ -103,11 +103,11 @@ async function main() {
     async function open(page,row) {
       assert.equal(await page.locator('#tront-theme-editor').evaluate(el=>el.open),false,'Open must start from a closed dialog');
       row.actions.push({action:'open',attempt:1});await page.locator('#tront-theme-btn').click();
-      await page.waitForFunction(()=>document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='true');
+      await page.waitForFunction(()=>document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='true'&&document.querySelector('#tront-theme-btn').getAttribute('aria-busy')!=='true');
       assert.equal(await page.locator('[data-action="close"]').evaluate(el=>el===document.activeElement),true,'Reopen puts focus on Close');
     }
     async function waitClosed(page,count) {
-      await page.waitForFunction(count=>!document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='false'&&document.activeElement===document.querySelector('#tront-theme-btn')&&(window.__qaCloseEvents||0)>count,count);
+      await page.waitForFunction(count=>!document.querySelector('#tront-theme-editor').open&&document.querySelector('#tront-theme-btn').getAttribute('aria-expanded')==='false'&&document.querySelector('#tront-theme-btn').getAttribute('aria-busy')!=='true'&&document.activeElement===document.querySelector('#tront-theme-btn')&&(window.__qaCloseEvents||0)>count,count);
     }
     async function close(page,row,escape=false) {
       const count=await page.evaluate(()=>window.__qaCloseEvents||0);
@@ -130,7 +130,7 @@ async function main() {
       row.phase=label;const result={label,clickAttempts:0};row.frames.push(result);
       const target=page.frameLocator('iframe').locator('p');
       result.before={geometry:await page.evaluate(resetHitTestInPage),child:await childState(page)};
-      await target.scrollIntoViewIfNeeded();result.ticks=await frames(page);
+      await page.locator('iframe').scrollIntoViewIfNeeded();await target.scrollIntoViewIfNeeded();result.ticks=await frames(page);
       result.screenshot=`${row.id}-${label}-rendered.png`;await target.screenshot({path:path.join(output,result.screenshot)});
       result.ready={geometry:await page.evaluate(resetHitTestInPage),child:await childState(page)};
       assert.equal(result.ready.geometry.dialog.modal,false);assert.equal(result.ready.geometry.iframes[0].style.pointerEvents,'auto');assert.equal(result.ready.child.readyState,'complete');

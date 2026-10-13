@@ -40,7 +40,7 @@ html[data-tront-theme-surface="project"][data-te-project="custom"] .cta-button:i
 /* The player and editor occupy different document regions. No overlay, player
    visibility change, DOM move, src change, or input-suppression guard is used. */
 html[data-tront-theme-surface="project"] .te-dialog.te-inline {
-  position: relative; inset: auto; width: min(760px, calc(100% - 24px));
+  position: relative; z-index: 2; inset: auto; width: min(760px, calc(100% - 24px));
   max-height: none; margin: 84px auto 24px; overflow: visible;
   scroll-margin-top: 76px;
 }
@@ -57,3 +57,9 @@ html[data-tront-theme-surface="project"] .te-inline .te-actions { justify-conten
   html[data-tront-theme-surface="project"] .te-inline .te-preview { grid-column: 1; grid-row: 5; }
   html[data-tront-theme-surface="project"] .te-inline .te-details { grid-column: 2; grid-row: 3 / 7; }
 }
+
+html[data-tront-theme-surface="project"] .te-inline[data-te-phase="opening"] > * { visibility: hidden; }
+html[data-tront-theme-surface="project"] .te-inline[data-te-phase="opening"]::before {
+  content: "Opening theme editor…"; position: absolute; top: 22px; left: 22px; color: var(--te-muted);
+}
+html[data-tront-theme-surface="project"] #tront-theme-btn[aria-busy="true"] { cursor: progress; opacity: .65; }

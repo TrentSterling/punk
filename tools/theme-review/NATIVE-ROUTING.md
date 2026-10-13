@@ -81,3 +81,9 @@ native Reset success, exact Undo, reading-position restoration and unchanged
 iframe node, attributes, document token/time origin and navigation count. It
 retains the iframe rectangle from before opening to expose stale-region clicks.
 There are no primitive controls in this app release gate.
+
+The actual app exposes an explicit busy/readiness lifecycle. The input runner
+waits for that user-visible readiness rather than only a computed open attribute;
+it still sends exactly one native Reset at the first available state. Each case
+records presentationMs and end-to-end opener-to-Reset latency. No runner sleep or
+rendering barrier is inserted between ready and Reset.

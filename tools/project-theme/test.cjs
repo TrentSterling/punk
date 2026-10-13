@@ -74,7 +74,7 @@ class Dialog extends Element {
 function environment(options = {}) {
     const writes = [], reads = [], removals = [], store = { ...(options.storage || {}) };
     const doc = { readyState: options.loading ? 'loading' : 'complete', listeners: {}, activeElement: null,
-        queuedDialogClose: !!options.queuedDialogClose, closeTasks: [] };
+        queuedDialogClose: !!options.queuedDialogClose, closeTasks: [], paintTasks: [] };
     doc.documentElement = new Element('html', { ...(options.optIn === false ? {} : { 'data-tront-theme-editor': '' }), ...(options.gallery ? { 'data-tront-theme-surface': 'gallery', 'data-te-gallery': 'native' } : {}), ...(options.project ? { 'data-tront-theme-surface': 'project', 'data-te-project': 'native' } : {}), ...(options.attrs || {}) }, doc);
     doc.documentElement.style.colorScheme = options.colorScheme || '';
     doc.body = new Element('body', {}, doc);
@@ -89,7 +89,7 @@ function environment(options = {}) {
     doc.createElement = name => name === 'dialog' ? new Dialog(name, {}, doc) : new Element(name, {}, doc);
     doc.addEventListener = (name, callback) => { (doc.listeners[name] ||= []).push(callback); };
     const events = {};
-    const win = { scrollX: 0, scrollY: 0, scrollTo(point) { this.scrollX = point.left; this.scrollY = point.top; }, document: doc, TrontThemeProject: options.config === undefined ? plain(PROJECTS[options.project] || null) : options.config, HTMLDialogElement: options.noDialog ? undefined : Dialog,
+    const win = { requestAnimationFrame(callback) { if (options.queuedPaint) doc.paintTasks.push(callback); else callback(); }, scrollX: 0, scrollY: 0, scrollTo(point) { this.scrollX = point.left; this.scrollY = point.top; }, document: doc, TrontThemeProject: options.config === undefined ? plain(PROJECTS[options.project] || null) : options.config, HTMLDialogElement: options.noDialog ? undefined : Dialog,
         localStorage: {
             getItem(key) { if (options.deniedStorage) throw new Error('SecurityError'); reads.push(key); return store[key] ?? null; },
             setItem(key, value) { if (options.deniedStorage || options.deniedWrite) throw new Error('QuotaExceededError'); store[key] = value; writes.push([key, value]); },
@@ -103,7 +103,7 @@ function environment(options = {}) {
     return { win, doc, opener, writes, reads, removals, store,
         api: win.TrontThemeEditor,
         ready() { doc.readyState = 'complete'; (doc.listeners.DOMContentLoaded || []).forEach(fn => fn()); },
-        context, get dialog() { return doc.body.children[0]; },
+        flushPaint() { while (doc.paintTasks.length) doc.paintTasks.shift()(); }, context, get dialog() { return doc.body.children[0]; },
         flushClose(count = doc.closeTasks.length) { while (count-- > 0 && doc.closeTasks.length) doc.closeTasks.shift()(); },
         storageEvent(key) { (events.storage || []).forEach(fn => fn({ key })); }
     };
@@ -628,4 +628,20 @@ test('Punk editor is an in-flow disclosure with unrestricted Tab, Escape and res
     env.opener.fire('click'); env.flushClose();
     assert.equal(env.dialog.open, true); assert.equal(env.context.window.scrollY, 0);
     click(env, 'close'); assert.equal(env.context.window.scrollY, 1000);
+});
+
+test('Punk exposes controls only after presentation and cancels stale open/close work', () => {
+    const env=environment({project:'punk', queuedPaint:true, queuedDialogClose:true});
+    env.win.scrollY=700; env.opener.fire('click');
+    assert.equal(env.dialog.inert,true); assert.equal(env.dialog.attrs['data-te-phase'],'opening');
+    assert.equal(env.opener.attrs['aria-busy'],'true');
+    env.opener.fire('click'); assert.equal(env.dialog.open,true);
+    env.flushPaint(); assert.equal(env.dialog.inert,false); assert.equal(env.dialog.attrs['data-te-phase'],'ready');
+    assert.equal(env.doc.activeElement.attrs['data-action'],'close');
+    click(env,'close'); assert.equal(env.dialog.attrs['data-te-phase'],'closing');
+    assert.equal(env.win.scrollY,700); env.opener.fire('click'); env.flushClose(); env.flushPaint();
+    assert.equal(env.dialog.open,true); assert.equal(env.dialog.attrs['data-te-phase'],'ready');
+    assert.equal(env.opener.attrs['aria-busy'],'false');
+    click(env,'close'); env.flushPaint(); assert.equal(env.dialog.attrs['data-te-phase'],'closed');
+    assert.equal(env.win.scrollY,700); assert.equal(env.doc.activeElement,env.opener);
 });

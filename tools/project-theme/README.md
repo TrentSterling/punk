@@ -171,3 +171,12 @@ single clicks reproduced it, including a minimal animation-free control. The
 observations do not establish a specific Chromium internal defect. Historical
 failing artifacts are retained separately; passing a delayed/rendered case never
 replaces an immediate first-click failure.
+
+The panel now has explicit opening/ready/closing states. During presentation its
+controls are inert, the opener exposes aria-busy, and the form is not advertised
+as usable. Two animation-frame boundaries present layout, then two present the
+restored page input state. There is no millisecond timer. Focus and readiness are
+published together; stale callbacks are cancelled by a generation counter. The
+original main's inert state is restored before readiness. Tests measure the
+actual interval and require the first available click, plus repeated activation
+during the busy state without activating the player.
