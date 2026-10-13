@@ -62,3 +62,57 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 7
+  modal-routing-diagnostic:
+    name: Modal routing (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        mode: [headless, headed]
+    env:
+      PROJECT_ID: punk
+      PROJECT_BASELINE_ROOT: ${{ github.workspace }}/.local/baseline
+      PROJECT_SCREENSHOTS: ${{ github.workspace }}/.local/theme-review
+      THEME_BROWSER_EXECUTABLE: /opt/google/chrome/chrome
+    steps:
+      - name: Read exact diagnostic head
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Read original project baseline
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: cad83d925ad2ef79b1efad4ad7da726f58535543
+          path: .local/baseline
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Check diagnostic boundaries
+        run: node --test tools/theme-review/modal-routing.test.cjs
+      - name: Install existing pinned tooling and official Chrome
+        run: |
+          npm install --prefix "$RUNNER_TEMP/project-tests" --no-save --package-lock=false --ignore-scripts playwright@1.62.0
+          node "$RUNNER_TEMP/project-tests/node_modules/playwright/cli.js" install --with-deps chrome
+          echo "NODE_PATH=$RUNNER_TEMP/project-tests/node_modules" >> "$GITHUB_ENV"
+      - name: Compare headless routing
+        if: ${{ matrix.mode == 'headless' }}
+        run: timeout 240s node tools/theme-review/modal-routing.cjs --browser-mode headless
+      - name: Compare headed routing on an isolated display
+        if: ${{ matrix.mode == 'headed' }}
+        run: |
+          command -v xvfb-run
+          timeout 240s xvfb-run -a --server-args="-screen 0 1920x1200x24" node tools/theme-review/modal-routing.cjs --browser-mode headed
+      - name: Retain local public-page diagnostic evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: punk-modal-routing-${{ matrix.mode }}-${{ github.event.pull_request.number }}
+          path: .local/theme-review/modal-routing-${{ matrix.mode }}/**
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 3
