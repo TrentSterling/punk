@@ -36,3 +36,5 @@ test('bounded native critical path contains only one opener and one Reset input'
   assert.match(critical,/row\.beforeReset\.dialog\.modal,false/);assert.match(critical,/row\.geometry\.panelOverlapsCurrentFrame,false/);assert.match(critical,/row\.geometry\.resetOverlapsPriorFrame,true/);
   assert.match(source,/assert\.deepEqual\(state\.scroll,openClosedGeometry\.scroll/);assert.match(source,/assert\.deepEqual\(identity\.attributes,row\.originalIframeAttributes\)/);assert.match(source,/assert\.equal\(identity\.sameNode,true\)/);assert.match(source,/assert\.equal\(child\.timeOrigin,row\.originalChild\.timeOrigin\)/);assert.match(source,/assert\.equal\(child\.documentToken,row\.originalChild\.documentToken\)/);assert.match(source,/row\.providerDocumentRequests,1/);
 });
+
+test("initial native page fade has a separate startup budget; interaction timeout remains strict",()=>{const source=fs.readFileSync(path.join(__dirname,"native-routing.cjs"),"utf8");assert.match(source,/opacity\)>\.99,null,\{timeout:10000\}/);assert.match(source,/setDefaultTimeout\(3000\)/);});
