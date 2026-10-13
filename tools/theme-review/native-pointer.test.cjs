@@ -2,6 +2,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {requireCI,parseWindowIds,parseGeometry,validateCalibration,planClick,verifyClickEvents,ARM_LIFETIME_MS}=require('./native-pointer.cjs');
+const {waitForWindowTitle,TITLE_READY_LIMIT_MS}=require('./native-pointer.cjs');
 const viewport={width:1440,height:900,devicePixelRatio:1};
 const probes=[{screen:{x:24,y:180},event:{type:'pointermove',isTrusted:true,screenX:24,screenY:180,clientX:24,clientY:93}},{screen:{x:56,y:212},event:{type:'pointermove',isTrusted:true,screenX:56,screenY:212,clientX:56,clientY:125}}];
 const mapping=()=>validateCalibration(structuredClone(probes),viewport);
@@ -15,6 +16,15 @@ test('window identity and geometry fail closed on ambiguity',()=>{
  assert.equal(parseWindowIds('123\n'),'123');for(const s of ['', '123\n456','invalid'])assert.throws(()=>parseWindowIds(s));
  assert.deepEqual(parseGeometry('WINDOW=123\nX=0\nY=0\nWIDTH=1440\nHEIGHT=987\nSCREEN=0\n'),{WINDOW:123,X:0,Y:0,WIDTH:1440,HEIGHT:987,SCREEN:0});
  assert.throws(()=>parseGeometry('WINDOW=123\nX=0\n'));
+});
+test('initial window caption readiness preserves exact identity without pointer input',async()=>{
+ const commands=[];let reads=0;
+ const ready=await waitForWindowTitle(async args=>{commands.push(args);return ++reads===1?'Prior page - Google Chrome':'native-pointer-test - Google Chrome';},'123','native-pointer-test');
+ assert.equal(ready.reads,2);assert.deepEqual(commands,[['getwindowname','123'],['getwindowname','123']]);
+ assert.ok(TITLE_READY_LIMIT_MS<=1000);
+});
+test('an unrelated native caption still fails closed and reports its observed value',async()=>{
+ await assert.rejects(waitForWindowTitle(async args=>{assert.deepEqual(args,['getwindowname','123']);return 'Unrelated window';},'123','native-pointer-test'),/within 1000ms; observed "Unrelated window"/);
 });
 test('trusted native moves calibrate translation without toolbar guessing',()=>{
  assert.deepEqual(mapping().offset,{x:0,y:87});

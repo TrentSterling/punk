@@ -8,7 +8,25 @@ const execFileAsync=promisify(execFile);
 const COMMAND_TIMEOUT_MS=2000;
 const OBSERVATION_TIMEOUT_MS=1000;
 const ARM_LIFETIME_MS=2000;
+const TITLE_READY_LIMIT_MS=1000;
 const TOLERANCE=1;
+async function waitForWindowTitle(run,windowId,token) {
+  const started=Date.now();let observed='',reads=0;
+  while(true) {
+    const remaining=TITLE_READY_LIMIT_MS-(Date.now()-started);
+    const mismatch=()=>new Error('X11 title did not identify the controlled page within 1000ms; observed '+JSON.stringify(observed.slice(0,250)));
+    if(remaining<=0)throw mismatch();
+    let timer;
+    try {
+      observed=String(await Promise.race([
+        run(['getwindowname',windowId]),
+        new Promise((_,reject)=>{timer=setTimeout(()=>reject(mismatch()),remaining);})
+      ]));reads++;
+    } finally {clearTimeout(timer);}
+    if(observed.includes(token))return {elapsedMs:Date.now()-started,reads};
+    await new Promise(resolve=>setTimeout(resolve,Math.min(25,Math.max(1,TITLE_READY_LIMIT_MS-(Date.now()-started)))));
+  }
+}
 function requireCI(env) {
   assert.ok(env.CI,'Native-pointer QA is CI-only; local Chrome/X11 input is not allowed');
   assert.equal(env.THEME_NATIVE_POINTER_DISPLAY_ISOLATED,'1','Caller must provision one isolated Xvfb display explicitly');
@@ -101,7 +119,12 @@ async function prepareNativePointer({page,env=process.env,runCommand}={}) {
     assert.deepEqual(parseGeometry(await run(['getwindowgeometry','--shell',windowId])),geometry,'X11 window geometry changed');
     assert.deepEqual(await page.evaluate(()=>({width:innerWidth,height:innerHeight,devicePixelRatio:devicePixelRatio})),viewport,'Page viewport changed');
   };
-  await run(['windowfocus','--sync',windowId]);await identity();
+  await run(['windowfocus','--sync',windowId]);
+  // document.title and the native window caption propagate asynchronously.
+  // Establish identity while initially closed, before calibration/arming and
+  // before the short Close/reopen sequence. This never delays a tested click.
+  const titleReadiness=await waitForWindowTitle(run,windowId,token);
+  await identity();
   await page.evaluate(installProbe);
   const probes=[];
   // Left page gutter avoids the app/control iframe. Unknown toolbar/window
@@ -118,7 +141,7 @@ async function prepareNativePointer({page,env=process.env,runCommand}={}) {
   }
   const mapping=validateCalibration(probes,viewport);let armedAt=null,finished=false,inputFailed=false;const clicks=[];
   return {
-    calibration:{windowId,geometry,token,mapping},
+    calibration:{windowId,geometry,token,mapping,titleReadiness},
     async arm() {
       assert.equal(armedAt,null,'A native input session may only be armed once');
       await identity();assert.equal(await page.evaluate(()=>{const d=document.querySelector('#tront-theme-editor');return Boolean(d)&&!d.open;}),true,'Arm only while the known dialog is closed');await page.evaluate(()=>{window.__nativePointerProbe.events.length=0;});armedAt=Date.now();
@@ -149,4 +172,4 @@ async function prepareNativePointer({page,env=process.env,runCommand}={}) {
     async dispose() {finished=true;await page.evaluate(title=>{window.__nativePointerProbe?.dispose();document.title=title;},originalTitle);}
   };
 }
-module.exports={COMMAND_TIMEOUT_MS,OBSERVATION_TIMEOUT_MS,ARM_LIFETIME_MS,requireCI,parseWindowIds,parseGeometry,validateCalibration,planClick,verifyClickEvents,prepareNativePointer};
+module.exports={COMMAND_TIMEOUT_MS,OBSERVATION_TIMEOUT_MS,ARM_LIFETIME_MS,TITLE_READY_LIMIT_MS,waitForWindowTitle,requireCI,parseWindowIds,parseGeometry,validateCalibration,planClick,verifyClickEvents,prepareNativePointer};
