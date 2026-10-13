@@ -34,6 +34,7 @@ class Element {
     addEventListener(name, listener) { (this.listeners[name] ||= []).push(listener); }
     fire(type, extra = {}) { const event = { type, target: this, ...extra }; for (const listener of this.listeners[type] || []) listener(event); }
     appendChild(child) { this.children.push(child); }
+    insertBefore(child, before) { this.children.splice(Math.max(0, this.children.indexOf(before)), 0, child); }
     focus() { this.doc.activeElement = this; }
     matches(selector) {
         if (selector[0] === '.') return (this.attrs.class || '').split(' ').includes(selector.slice(1));
@@ -55,6 +56,7 @@ class Element {
     }
 }
 class Dialog extends Element {
+    show() { this.showModal(); this.modeless = true; }
     showModal() {
         assert.equal(this.open || false, false, 'showModal is not called twice');
         this.previouslyFocused = this.doc.activeElement; this.open = true;
@@ -87,7 +89,7 @@ function environment(options = {}) {
     doc.createElement = name => name === 'dialog' ? new Dialog(name, {}, doc) : new Element(name, {}, doc);
     doc.addEventListener = (name, callback) => { (doc.listeners[name] ||= []).push(callback); };
     const events = {};
-    const win = { document: doc, TrontThemeProject: options.config === undefined ? plain(PROJECTS[options.project] || null) : options.config, HTMLDialogElement: options.noDialog ? undefined : Dialog,
+    const win = { scrollX: 0, scrollY: 0, scrollTo(point) { this.scrollX = point.left; this.scrollY = point.top; }, document: doc, TrontThemeProject: options.config === undefined ? plain(PROJECTS[options.project] || null) : options.config, HTMLDialogElement: options.noDialog ? undefined : Dialog,
         localStorage: {
             getItem(key) { if (options.deniedStorage) throw new Error('SecurityError'); reads.push(key); return store[key] ?? null; },
             setItem(key, value) { if (options.deniedStorage || options.deniedWrite) throw new Error('QuotaExceededError'); store[key] = value; writes.push([key, value]); },
@@ -101,7 +103,7 @@ function environment(options = {}) {
     return { win, doc, opener, writes, reads, removals, store,
         api: win.TrontThemeEditor,
         ready() { doc.readyState = 'complete'; (doc.listeners.DOMContentLoaded || []).forEach(fn => fn()); },
-        get dialog() { return doc.body.children[0]; },
+        context, get dialog() { return doc.body.children[0]; },
         flushClose(count = doc.closeTasks.length) { while (count-- > 0 && doc.closeTasks.length) doc.closeTasks.shift()(); },
         storageEvent(key) { (events.storage || []).forEach(fn => fn({ key })); }
     };
@@ -608,3 +610,22 @@ test('provenance locks original snapshots and the exact shipped derivative bytes
 });
 
 
+
+test('Punk editor is an in-flow disclosure with unrestricted Tab, Escape and restored reading position', () => {
+    const env = environment({ project: 'punk', queuedDialogClose: true });
+    env.context.window.scrollY = 1000;
+    env.opener.fire('click');
+    assert.equal(env.dialog.modeless, true);
+    assert.match(env.dialog.className, /te-inline/);
+    assert.equal(env.context.window.scrollY, 0);
+    assert.ok(env.dialog.markup.indexOf('data-action="reset"') < env.dialog.markup.indexOf('name="preset"'));
+    let prevented = false;
+    env.dialog.fire('keydown', { key: 'Tab', preventDefault() { prevented = true; } });
+    assert.equal(prevented, false);
+    env.dialog.fire('keydown', { key: 'Escape', preventDefault() { prevented = true; } });
+    assert.equal(prevented, true); assert.equal(env.dialog.open, false);
+    assert.equal(env.context.window.scrollY, 1000); assert.equal(env.doc.activeElement, env.opener);
+    env.opener.fire('click'); env.flushClose();
+    assert.equal(env.dialog.open, true); assert.equal(env.context.window.scrollY, 0);
+    click(env, 'close'); assert.equal(env.context.window.scrollY, 1000);
+});

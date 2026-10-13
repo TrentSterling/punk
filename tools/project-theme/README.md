@@ -154,3 +154,20 @@ landing page and its native baseline. Do not bypass blocked browser execution.
 
 The asynchronous close notification is specified in the
 [HTML dialog closing algorithm](https://html.spec.whatwg.org/multipage/interactive-elements.html#close-the-dialog).
+
+## HackerPunk's in-page editor
+
+HackerPunk uses the same four-peg controls in a modeless, in-flow panel above the
+original page. Reset/Undo sit near the heading, and wide screens use two columns.
+The player remains its original DOM node with the original source and attributes.
+No opacity, visibility, inertness, pointer suppression, or reload is applied to it.
+Opening saves the reading position and scrolls to the editor; Close or Escape
+restores that position and returns keyboard focus to Theme. Tab stays in ordinary
+page order. Other project configurations retain the native modal behavior.
+
+This is a local structural response to reproducible cross-origin iframe input
+misrouting during native-modal reopening in Chrome. Both CDP and real XTEST
+single clicks reproduced it, including a minimal animation-free control. The
+observations do not establish a specific Chromium internal defect. Historical
+failing artifacts are retained separately; passing a delayed/rendered case never
+replaces an immediate first-click failure.

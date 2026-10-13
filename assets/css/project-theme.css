@@ -37,8 +37,23 @@ html[data-tront-theme-surface="project"][data-te-project="custom"] .cta-button:i
 @media (prefers-reduced-motion: reduce) {
   html[data-tront-theme-surface="project"] { scroll-behavior: auto; }
 }
-/* Keep the embedded player inert while the native modal is open, including
-   cross-origin frame hit-testing that can otherwise intercept an editor click. */
-html[data-tront-theme-surface="project"]:has(#tront-theme-editor:modal) .video-container iframe {
-  pointer-events: none;
+/* The player and editor occupy different document regions. No overlay, player
+   visibility change, DOM move, src change, or input-suppression guard is used. */
+html[data-tront-theme-surface="project"] .te-dialog.te-inline {
+  position: relative; inset: auto; width: min(760px, calc(100% - 24px));
+  max-height: none; margin: 84px auto 24px; overflow: visible;
+  scroll-margin-top: 76px;
+}
+html[data-tront-theme-surface="project"] .te-dialog.te-inline[open] {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px;
+}
+html[data-tront-theme-surface="project"] .te-inline :is(.te-heading, .te-actions, .te-mode, .te-preview, .te-status) { margin: 0; }
+html[data-tront-theme-surface="project"] .te-inline .te-actions { justify-content: flex-start; }
+@media (min-width: 600px) {
+  html[data-tront-theme-surface="project"] .te-dialog.te-inline[open] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 28px; }
+  html[data-tront-theme-surface="project"] .te-inline :is(.te-heading, .te-actions, .te-status) { grid-column: 1 / -1; }
+  html[data-tront-theme-surface="project"] .te-inline .te-presets { grid-column: 1; grid-row: 3; }
+  html[data-tront-theme-surface="project"] .te-inline .te-mode { grid-column: 1; grid-row: 4; }
+  html[data-tront-theme-surface="project"] .te-inline .te-preview { grid-column: 1; grid-row: 5; }
+  html[data-tront-theme-surface="project"] .te-inline .te-details { grid-column: 2; grid-row: 3 / 7; }
 }

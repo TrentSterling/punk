@@ -71,3 +71,13 @@ remain unverified.
 Local non-browser validation:
 
 `node --test tools/theme-review/native-routing.test.cjs tools/theme-review/native-pointer.test.cjs tools/theme-review/modal-routing.test.cjs`
+
+## Current structural release gate
+
+The historical 18-case modal diagnostic above remains in its original reports.
+The current runner has twelve actual-app cases, six top-of-page and six with the
+video scrolled below the navbar. Each requires a modeless editor in flow, first
+native Reset success, exact Undo, reading-position restoration and unchanged
+iframe node, attributes, document token/time origin and navigation count. It
+retains the iframe rectangle from before opening to expose stale-region clicks.
+There are no primitive controls in this app release gate.

@@ -42,6 +42,9 @@
                 }) } };
     }
     var project = projectSurface ? projectConfig(root.TrontThemeProject) : null;
+    // Punk's player is a cross-process frame. Keep its editor in document flow,
+    // rather than placing newly interactive controls over an embedded surface.
+    var inlineEditor = !!(project && project.id === 'punk');
     // A bad configuration must not opt the page into an unrelated default or key.
     if (projectSurface && !project) return;
     var KEY = project ? project.storageKey : gallery ? 'tront-theme-gallery-v1' : 'tront-theme-editor-v1';
@@ -280,9 +283,10 @@
         if (!opener || !root.HTMLDialogElement || typeof root.HTMLDialogElement.prototype.showModal !== 'function') return;
         dialog = doc.createElement('dialog');
         dialog.id = 'tront-theme-editor';
-        dialog.className = 'te-dialog';
+        dialog.className = 'te-dialog' + (inlineEditor ? ' te-inline' : '');
         dialog.setAttribute('aria-labelledby', 'te-title');
-        dialog.innerHTML = '<div class="te-heading"><div><h2 id="te-title">Theme</h2></div><button type="button" class="te-close" data-action="close" aria-label="Close theme editor">×</button></div>' +
+        var actions = '<div class="te-actions"><button type="button" data-action="undo">Undo</button><button type="button" data-action="reset">Reset</button></div>';
+        dialog.innerHTML = '<div class="te-heading"><div><h2 id="te-title">Theme</h2></div><button type="button" class="te-close" data-action="close" aria-label="Close theme editor">×</button></div>' + (inlineEditor ? actions : '') +
             '<div class="te-presets"><label for="te-preset">Palette</label><select id="te-preset" name="preset">' + PRESETS.map(function (p) { return '<option value="' + p.id + '">' + p.name + '</option>'; }).join('') + (project ? '<option value="project-original">' + project.nativeLabel.replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }) + '</option>' : gallery ? '<option value="gallery-original">Original gallery</option>' : '') + '<option value="custom" disabled>Custom</option></select><button type="button" data-action="magic">ColorMagic</button></div>' +
             '<fieldset class="te-mode"><legend>Appearance</legend><label><input type="radio" name="mode" value="dark"> Dark</label><label><input type="radio" name="mode" value="light"> Light</label></fieldset>' +
             '<div class="te-preview" role="img" aria-label="Your selected gradient colors"></div>' +
@@ -292,8 +296,9 @@
             '<label class="te-slider" for="te-intensity">Color intensity <output for="te-intensity" data-value="intensity"></output><input id="te-intensity" type="range" name="intensity" min="0" max="100" step="1"></label>' +
             '<label class="te-slider" for="te-frost">Panel frost <output for="te-frost" data-value="frost"></output><input id="te-frost" type="range" name="frost" min="75" max="100" step="1"></label>' +
             '<p class="te-hint">Page colors stay softened so the text stays readable.</p></div></section>' +
-            '<div class="te-actions"><button type="button" data-action="undo">Undo</button><button type="button" data-action="reset">Reset</button></div><p class="te-status" role="status" aria-live="polite"></p>';
-        doc.body.appendChild(dialog);
+            (inlineEditor ? '' : actions) + '<p class="te-status" role="status" aria-live="polite"></p>';
+        if (inlineEditor) doc.body.insertBefore(dialog, doc.body.firstChild);
+        else doc.body.appendChild(dialog);
         if (gallery && doc.querySelectorAll) {
             galleryCards = Array.prototype.map.call(doc.querySelectorAll('.item'), function (element) {
                 return { element: element, color: T.hexToRgb(element.style.getPropertyValue('--highlight-color').trim()) || currentTokens.colors.accent };
@@ -307,6 +312,7 @@
         opener.setAttribute('aria-controls', dialog.id);
         opener.setAttribute('aria-expanded', 'false');
         var dialogSessionOpen = false;
+        var readingPosition = null;
         function finishClose() {
             // Native close events are queued. An older event must never alter a
             // reopened dialog, split its draft, or steal focus from a later action.
@@ -314,6 +320,10 @@
             dialogSessionOpen = false;
             if (draftStart) { remember(draftStart); draftStart = null; sync(); }
             opener.setAttribute('aria-expanded', 'false');
+            if (inlineEditor && readingPosition) {
+                root.scrollTo({ left: readingPosition.x, top: readingPosition.y, behavior: 'instant' });
+                readingPosition = null;
+            }
             // Native close already restored focus. Never overwrite a newer
             // focus choice when its queued notification eventually arrives.
         }
@@ -329,9 +339,14 @@
             if (dialog.open) return;
             // A native close may have finished before its notification arrived.
             finishClose();
-            dialog.showModal(); dialogSessionOpen = true;
+            if (inlineEditor) {
+                readingPosition = { x: root.scrollX, y: root.scrollY };
+                dialog.show();
+                root.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+            } else dialog.showModal();
+            dialogSessionOpen = true;
             opener.setAttribute('aria-expanded', 'true');
-            dialog.querySelector('[data-action="close"]').focus();
+            dialog.querySelector('[data-action="close"]').focus({ preventScroll: true });
         });
         dialog.addEventListener('close', finishClose);
         // Keep sequential keyboard navigation inside the editor even when a
@@ -339,6 +354,10 @@
         // These endpoints are always visible/enabled; native Tab order between
         // them still handles the native radio and slider controls.
         dialog.addEventListener('keydown', function (event) {
+            if (inlineEditor) {
+                if (event.key === 'Escape') { event.preventDefault(); closeEditor(); }
+                return; // An in-page editor does not trap navigation to the page.
+            }
             if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey) return;
             var first = dialog.querySelector('[data-action="close"]');
             var last = dialog.querySelector('[data-action="reset"]');
@@ -351,7 +370,7 @@
         var backdropDown = false;
         function isOutside(event) {
             var rect = dialog.getBoundingClientRect();
-            return event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom);
+            return !inlineEditor && event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom);
         }
         dialog.addEventListener('pointerdown', function (event) { backdropDown = isOutside(event); });
         dialog.addEventListener('click', function (event) {

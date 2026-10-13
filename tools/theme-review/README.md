@@ -62,3 +62,22 @@ HackerPunk additionally checks modal-only iframe pointer containment in a fresh 
 `node tools/theme-review/stress.cjs` runs 24 isolated desktop Chrome contexts, alternating 12 immediate and 12 rendered-modal cases. Every Reset/Undo and restored iframe activation uses exactly one ordinary Playwright click. The immediate cases receive no additional modal-render barrier; rendered cases require two parent/child animation frames and a captured modal PNG. A rendered pass never replaces an immediate failure. Both cohorts check Close, real Escape, reopen focus, storage isolation and restored cross-origin frame clicks.
 
 The sample must complete within 175 seconds and reports unfinished cases as failures. `stress/stress.json` retains cohort totals, each first-click outcome, parent/child event targets, hit testing and failure screenshots. The iframe remains the labelled controlled provider placeholder; this does not certify live YouTube playback. Run only in the existing CI browser environment. `stress.test.cjs` tests the sampler contract without launching Chrome.
+
+### Current HackerPunk editor contract
+
+The earlier modal/iframe-overlap experiments above document the diagnosis. The
+current Punk release gate instead requires a modeless editor in document flow,
+no panel/player overlap, and the player's original pointer behavior at all times.
+Every Reset/Undo still uses one ordinary activation with immediate state checks.
+The 24-context CDP sampler alternates immediate and rendered cases; within each
+cohort, six openings start at the page top and six with the player scrolled into
+view. Prior and current player rectangles remain in the report. The native XTEST
+job separately uses twelve fresh actual-app contexts across those two starting
+positions. It checks unchanged iframe node/source/document identity and reading
+position restoration. Native-control diagnostic failures are historical evidence,
+not an unrelated fixture that can block the repaired app indefinitely.
+
+The main browser suite also checks short mobile viewports, normal Tab access to
+all four pegs, Escape, close focus/scroll restoration and native/custom visuals.
+The Monke modal contract is unchanged. Actual YouTube playback is still unverified;
+the controlled cross-origin frame checks input and document continuity only.

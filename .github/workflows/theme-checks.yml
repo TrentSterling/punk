@@ -46,7 +46,7 @@ jobs:
       - name: Test native and custom project themes in Chrome
         if: ${{ !cancelled() && steps.browser-tools.outcome == 'success' }}
         run: timeout 360s node tools/theme-review/browser.cjs
-      - name: Stress first-click modal and iframe routing in fresh Chrome contexts
+      - name: Stress first-click in-page editor and iframe restoration
         if: ${{ !cancelled() && steps.browser-tools.outcome == 'success' }}
         run: timeout 180s node tools/theme-review/stress.cjs
       - name: Save public-site local preview screenshots and reports
@@ -63,7 +63,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
   native-pointer-diagnostic:
-    name: Native pointer routing
+    name: Native pointer first-click regression
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     env:
@@ -73,7 +73,7 @@ jobs:
       THEME_BROWSER_EXECUTABLE: /opt/google/chrome/chrome
       THEME_NATIVE_POINTER_DISPLAY_ISOLATED: '1'
     steps:
-      - name: Read exact diagnostic head
+      - name: Read exact tested head
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: ${{ github.event.pull_request.head.sha }}

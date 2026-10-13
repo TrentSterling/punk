@@ -282,12 +282,19 @@ async function main(){
       for(let i=0;i<4;i++)await page.locator(`[name="color-${i}"]`).evaluate((el,color)=>{el.value=color;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));},['#000000','#ffffff','#ff00ff','#00ff00'][i]);
       const state=await stored(page);assert.equal(state.pegs.length,4);assert.equal(state.preset,'custom');assert.deepEqual(state.pegs.map(p=>p.color),['#000000','#ffffff','#ff00ff','#00ff00']);await close(page);return audit(page,`custom-${mode}`);
     });
-    await check('modal, keyboard range input, focus trap, Escape and reopening',async()=>{
+    await check('editor keyboard range input, appropriate focus behavior, Escape and reopening',async()=>{
       await open(page);assert.equal(await page.locator('#tront-theme-btn').getAttribute('aria-expanded'),'true');
       assert.equal(await page.locator('[data-action="close"]').evaluate(el=>el===document.activeElement),true);
-      await page.keyboard.press('Shift+Tab');assert.equal(await page.locator('[data-action="reset"]').evaluate(el=>el===document.activeElement),true);
-      await page.keyboard.press('Tab');assert.equal(await page.locator('[data-action="close"]').evaluate(el=>el===document.activeElement),true);
-      for(let i=0;i<32;i++){await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>!!document.activeElement.closest('#tront-theme-editor')),true);}
+      if(options.project==='punk') {
+        assert.equal(await page.locator('#tront-theme-editor').evaluate(el=>el.matches(':modal')),false);
+        const visited=new Set();
+        for(let i=0;i<24;i++){await page.keyboard.press('Tab');const name=await page.evaluate(()=>document.activeElement.name||'');if(name)visited.add(name);}
+        for(let i=0;i<4;i++){assert.ok(visited.has('color-'+i),'keyboard reaches color '+i);assert.ok(visited.has('position-'+i),'keyboard reaches position '+i);}
+      } else {
+        await page.keyboard.press('Shift+Tab');assert.equal(await page.locator('[data-action="reset"]').evaluate(el=>el===document.activeElement),true);
+        await page.keyboard.press('Tab');assert.equal(await page.locator('[data-action="close"]').evaluate(el=>el===document.activeElement),true);
+        for(let i=0;i<32;i++){await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>!!document.activeElement.closest('#tront-theme-editor')),true);}
+      }
       const range=page.locator('[name="position-1"]');await range.focus();const value=Number(await range.inputValue());await page.keyboard.press('ArrowRight');assert.equal(Number(await range.inputValue()),value+1);
       const escapeCloseCount=await page.evaluate(()=>window.__qaCloseEvents||0);await page.keyboard.press('Escape');await waitClosed(page,escapeCloseCount);assert.equal(await page.locator('#tront-theme-editor').evaluate(el=>el.open),false);assert.equal(await page.locator('#tront-theme-btn').evaluate(el=>el===document.activeElement),true);
       for(let i=0;i<3;i++){await open(page);await close(page);}assert.equal(await page.locator('#tront-theme-btn').getAttribute('aria-expanded'),'false');
@@ -320,16 +327,6 @@ async function main(){
         await p.locator('[data-action="undo"]').click();assert.deepEqual(await stored(p),before);assert.equal(await p.getAttribute('html','data-te-project'),'custom');await close(p);
       }catch(error){if(p&&!p.isClosed()){report.interactions.push({test:'isolated-reset-failure-hit-test',geometry:await p.evaluate(resetHitTestInPage),state:await p.evaluate(interactionStateInPage)});await p.screenshot({path:path.join(options.output,'isolated-reset-failure.png')});report.screenshots.push({file:'isolated-reset-failure.png',position:'failure'});}
         report.interactions.push({test:'isolated-reset-original-assertion-failure',error:error.message,strictFailureRetained:true});save();
-        if(initialResetFailed&&p&&!p.isClosed()){
-          let diagnosticStyle;
-          try{
-            diagnosticStyle=await p.addStyleTag({content:'html:has(#tront-theme-editor:modal) iframe { pointer-events: none !important; }'});
-            report.interactions.push({test:'diagnostic-only-iframe-containment-before',geometry:await p.evaluate(resetHitTestInPage),state:await p.evaluate(interactionStateInPage),doesNotChangeOriginalFailure:true});
-            await p.locator('[data-action="reset"]').click();
-            report.interactions.push({test:'diagnostic-only-iframe-containment-after-normal-click',geometry:await p.evaluate(resetHitTestInPage),state:await p.evaluate(interactionStateInPage),doesNotChangeOriginalFailure:true});
-          }catch(diagnosticError){report.interactions.push({test:'diagnostic-only-iframe-containment-error',error:diagnosticError.message,doesNotChangeOriginalFailure:true});}
-          finally{if(diagnosticStyle)await diagnosticStyle.evaluate(el=>el.remove());}
-        }
         throw error;}finally{if(p&&!p.isClosed())report.interactions.push({test:'isolated-reset-final',state:await p.evaluate(interactionStateInPage)});await fresh.close();}
     });
     if(options.project==='punk')await check('fresh pre-modal controlled iframe accepts its first rendered normal click',async()=>{
@@ -337,31 +334,39 @@ async function main(){
       try{const p=await load(fresh,current.origin);return await clickRenderedFrame(p,'pre-modal-baseline');}
       finally{await fresh.close();}
     });
-    if(options.project==='punk')await check('Punk modal contains iframe pointer input and restores it after Close and Escape',async()=>{
-      const fresh=await contextFor(current.origin,1440);let p;const transitions=[];
+    if(options.project==='punk')for(const width of [1440,390,320])for(const start of ['top','video'])await check(`Punk flow editor ${width}px from ${start} preserves player and reading position`,async()=>{
+      const fresh=await contextFor(current.origin,width);let p;const observations=[];
       try{
-        p=await load(fresh,current.origin);const iframe=p.locator('iframe');assert.equal(await iframe.count(),1);
-        const original=await iframe.evaluate(el=>getComputedStyle(el).pointerEvents);assert.equal(original,'auto','original closed-page iframe accepts normal pointer input');
-        const observe=async label=>{const entry={label,pointerEvents:await iframe.evaluate(el=>getComputedStyle(el).pointerEvents),modal:await p.locator('#tront-theme-editor').evaluate(el=>el.matches(':modal'))};transitions.push(entry);return entry;};
-        await choose(p,'cyan');const before=await stored(p);await open(p);
-        assert.deepEqual(await observe('custom modal before Reset'),{label:'custom modal before Reset',pointerEvents:'none',modal:true});
-        // Keep a genuine first normal pointer activation; do not force or invoke the handler.
-        await p.locator('[data-action="reset"]').click();assert.equal(await p.getAttribute('html','data-te-project'),'native');assert.equal(await stored(p),null);
-        assert.deepEqual(await observe('native modal after Reset'),{label:'native modal after Reset',pointerEvents:'none',modal:true});
-        await p.locator('[data-action="undo"]').click();assert.deepEqual(await stored(p),before);assert.equal(await p.getAttribute('html','data-te-project'),'custom');
-        await close(p);assert.deepEqual(await observe('after Close'),{label:'after Close',pointerEvents:original,modal:false});
-        // Preserve the prior unsynchronized failure as evidence; a real rendered frame
-        // is now required before the one normal child click, with no retry or force.
-        const renderedFrame=await clickRenderedFrame(p,'after-close');
-        assert.equal(await p.locator('#tront-theme-editor').evaluate(el=>el.matches(':modal')),false);
-        const frameClick=renderedFrame.parentFrameClick;assert.equal(frameClick.modal,false);
-        await open(p);await p.selectOption('[name="preset"]','project-original');
-        assert.deepEqual(await observe('native modal before Escape'),{label:'native modal before Escape',pointerEvents:'none',modal:true});
-        const events=await p.evaluate(()=>window.__qaCloseEvents||0);await p.keyboard.press('Escape');await waitClosed(p,events);
-        assert.deepEqual(await observe('after real Escape'),{label:'after real Escape',pointerEvents:original,modal:false});
-        report.interactions.push({test:'punk-modal-iframe-containment',transitions,normalClosedFrameClick:frameClick,providerPlayback:'unverified; controlled inert iframe only'});
-        return {transitions,normalResetUndo:'passed',normalClosedFrameClick:'passed on controlled cross-origin placeholder',providerPlayback:'unverified'};
-      }catch(error){if(p&&!p.isClosed()){report.interactions.push({test:'punk-modal-iframe-containment-failure',transitions,state:await p.evaluate(interactionStateInPage),geometry:await p.evaluate(resetHitTestInPage)});await p.screenshot({path:path.join(options.output,'punk-modal-iframe-containment-failure.png')});}throw error;}
+        p=await load(fresh,current.origin);await p.setViewportSize({width,height:width<600?450:900});
+        await choose(p,'cyan');const custom=await stored(p);
+        const iframe=p.locator('iframe');const node=await iframe.elementHandle();
+        const attrs=await iframe.evaluate(el=>[...el.attributes].map(a=>[a.name,a.value]));
+        const child=p.frameLocator('iframe').locator('body');const identity=await child.evaluate(()=>({origin:performance.timeOrigin,token:window.__flowIdentity=crypto.randomUUID()}));
+        for(const dismissal of ['Close','Escape']) {
+          await p.evaluate(start=>{const frame=document.querySelector('iframe');scrollTo({top:start==='video'?frame.getBoundingClientRect().top+scrollY-84:0,behavior:'instant'});},start);
+          const before=await p.evaluate(resetHitTestInPage);await open(p);
+          const geometry=await p.evaluate(resetHitTestInPage);observations.push({dismissal,before,opened:geometry});
+          assert.equal(geometry.dialog.modal,false);assert.equal(geometry.dialog.style.position,'relative');
+          assert.ok(geometry.dialog.rect.bottom<geometry.iframes[0].rect.y,'entire editor precedes player');
+          assert.equal(geometry.iframes[0].style.pointerEvents,'auto');assert.equal(geometry.scroll.y,0);
+          await p.locator('[data-action="reset"]').click();assert.equal(await stored(p),null);assert.equal(await p.getAttribute('html','data-te-project'),'native');
+          await p.locator('[data-action="undo"]').click();assert.deepEqual(await stored(p),custom);
+          await p.locator('[data-action="close"]').focus();const visited=new Set();
+          for(let i=0;i<24;i++){await p.keyboard.press('Tab');const name=await p.evaluate(()=>document.activeElement.name||'');if(name)visited.add(name);}
+          for(let i=0;i<4;i++){assert.ok(visited.has('color-'+i));assert.ok(visited.has('position-'+i));}
+          await p.locator('[name="frost"]').focus();
+          assert.equal(await p.locator('[name="frost"]').evaluate(el=>{const r=el.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),true,'short viewport scrolls final slider into view');
+          const file=`flow-editor-${width}-${start}-${dismissal.toLowerCase()}.png`;
+          await p.screenshot({path:path.join(options.output,file)});report.screenshots.push({file,position:'scrolled keyboard editor'});
+          if(dismissal==='Escape'){const events=await p.evaluate(()=>window.__qaCloseEvents||0);await p.keyboard.press('Escape');await waitClosed(p,events);}else await close(p);
+          const restored=await p.evaluate(()=>scrollY);assert.ok(Math.abs(restored-before.scroll.y)<1,'reading position restored');
+          assert.equal(await node.evaluate(el=>el===document.querySelector('iframe')&&el.isConnected),true);
+          assert.deepEqual(await iframe.evaluate(el=>[...el.attributes].map(a=>[a.name,a.value])),attrs);
+          assert.deepEqual(await child.evaluate(()=>({origin:performance.timeOrigin,token:window.__flowIdentity})),identity,'player document was not reloaded');
+          await clickRenderedFrame(p,`flow-${width}-${start}-${dismissal}`);
+        }
+        return {observations,iframeNodeSourceAndDocument:'unchanged',providerPlayback:'unverified; controlled cross-origin frame'};
+      }catch(error){if(p&&!p.isClosed()){report.interactions.push({test:'flow-editor-failure',width,start,observations,state:await p.evaluate(interactionStateInPage)});await p.screenshot({path:path.join(options.output,`flow-failure-${width}-${start}.png`)});}throw error;}
       finally{await fresh.close();}
     });
     if(options.project==='punk')await check('diagnostic control: rendered modal first Reset/Undo and closed-frame input',async()=>{
@@ -370,12 +375,9 @@ async function main(){
       try{
         p=await load(fresh,current.origin);await choose(p,'cyan');const before=await stored(p);await open(p);
         control.phase='modal before paint barrier';control.beforePaint=await p.evaluate(resetHitTestInPage);
-        const ticks=await Promise.all([
-          p.evaluate(()=>new Promise(resolve=>requestAnimationFrame(a=>requestAnimationFrame(b=>resolve([a,b]))))),
-          p.frameLocator('iframe').locator('body').evaluate(()=>new Promise(resolve=>requestAnimationFrame(a=>requestAnimationFrame(b=>resolve([a,b])))))
-        ]);control.animationFrameTicks={parent:ticks[0],child:ticks[1]};
+        control.animationFrameTicks={parent:await p.evaluate(()=>new Promise(resolve=>requestAnimationFrame(a=>requestAnimationFrame(b=>resolve([a,b])))))};
         const file='punk-rendered-modal-control-before-reset.png';await p.locator('#tront-theme-editor').screenshot({path:path.join(options.output,file)});report.screenshots.push({file,position:'rendered modal diagnostic barrier'});
-        control.afterPaint=await p.evaluate(resetHitTestInPage);assert.equal(control.afterPaint.dialog.modal,true);assert.equal(control.afterPaint.iframes[0].style.pointerEvents,'none');
+        control.afterPaint=await p.evaluate(resetHitTestInPage);assert.equal(control.afterPaint.dialog.modal,false);assert.equal(control.afterPaint.iframes[0].style.pointerEvents,'auto');assert.ok(control.afterPaint.dialog.rect.bottom<control.afterPaint.iframes[0].rect.y);
         control.phase='first normal Reset';control.resetClickAttempts++;await p.locator('[data-action="reset"]').click();
         control.afterReset={state:await p.evaluate(interactionStateInPage),geometry:await p.evaluate(resetHitTestInPage)};
         assert.equal(await p.getAttribute('html','data-te-project'),'native');assert.equal(await stored(p),null);

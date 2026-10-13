@@ -3,11 +3,16 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const {PLAN,HARD_LIMIT_MS,WORK_LIMIT_MS,CASE_LIMIT_MS,aggregate,summarizeLatency}=require('./native-routing.cjs');
-test('separate native cohort has exactly 12 app and 6 primitive controls',()=>{
-  assert.equal(PLAN.length,18);assert.equal(new Set(PLAN.map(r=>r.id)).size,18);assert.ok(Object.isFrozen(PLAN)&&PLAN.every(Object.isFrozen));
-  assert.equal(PLAN.filter(r=>r.surface==='app').length,12);assert.equal(PLAN.filter(r=>r.surface==='native').length,6);
-  for(let i=0;i<6;i++)assert.deepEqual(PLAN.slice(i*3,i*3+3).map(r=>r.surface),['app','native','app']);
+const {PLAN,HARD_LIMIT_MS,WORK_LIMIT_MS,CASE_LIMIT_MS,aggregate,summarizeLatency,pointInRect,rectsOverlap}=require('./native-routing.cjs');
+test('structural native cohort has six top and six video-scrolled real-app contexts',()=>{
+  assert.equal(PLAN.length,12);assert.equal(new Set(PLAN.map(r=>r.id)).size,12);assert.ok(Object.isFrozen(PLAN)&&PLAN.every(Object.isFrozen));
+  assert.equal(PLAN.filter(r=>r.surface==='app').length,12);assert.equal(PLAN.filter(r=>r.opening==='top').length,6);assert.equal(PLAN.filter(r=>r.opening==='video').length,6);
+  for(let i=0;i<6;i++)assert.deepEqual(PLAN.slice(i*2,i*2+2).map(r=>r.opening),['top','video']);
+});
+test('non-overlap rejects even partial current-frame intersections and records stale regions',()=>{
+  const prior={x:100,y:80,right:1300,bottom:750},current={x:100,y:1500,right:1300,bottom:2200},editor={x:300,y:70,right:1100,bottom:650},point={x:620,y:150};
+  assert.equal(pointInRect(point,prior),true);assert.equal(pointInRect(point,current),false);assert.equal(rectsOverlap(editor,current),false);assert.equal(rectsOverlap(editor,prior),true);
+  assert.equal(rectsOverlap({...editor,bottom:1501},current),true);assert.equal(rectsOverlap({...editor,bottom:1500},current),false);
 });
 test('partial, failed, or incomplete native samples cannot pass',()=>{
   const complete=PLAN.map(r=>({...r,pass:true,finishedAt:'done',reset:{pass:true}}));assert.equal(aggregate(complete).pass,true);
@@ -28,4 +33,6 @@ test('bounded native critical path contains only one opener and one Reset input'
   assert.match(source,/row\.afterReset\.stored!==null/);assert.match(source,/assert\.equal\(state\.stored,custom\)/);
   assert.match(source,/requireCI\(process\.env\)/);assert.match(source,/row\.oopifObserved,true/);assert.match(source,/row\.blockedNonReadRequests\|\|\[\],\[\]/);
   assert.ok(source.indexOf('await native.arm()')<source.indexOf("await open('prepare cyan open')"),'Calibration and arm precede the cyan preparation cycle');
+  assert.match(critical,/row\.beforeReset\.dialog\.modal,false/);assert.match(critical,/row\.geometry\.panelOverlapsCurrentFrame,false/);assert.match(critical,/row\.geometry\.resetOverlapsPriorFrame,true/);
+  assert.match(source,/assert\.deepEqual\(state\.scroll,openClosedGeometry\.scroll/);assert.match(source,/assert\.deepEqual\(identity\.attributes,row\.originalIframeAttributes\)/);assert.match(source,/assert\.equal\(identity\.sameNode,true\)/);assert.match(source,/assert\.equal\(child\.timeOrigin,row\.originalChild\.timeOrigin\)/);assert.match(source,/assert\.equal\(child\.documentToken,row\.originalChild\.documentToken\)/);assert.match(source,/row\.providerDocumentRequests,1/);
 });

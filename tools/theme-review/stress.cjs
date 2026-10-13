@@ -156,14 +156,17 @@ async function main() {
         await page.evaluate(instrumentInteractionsInPage);
         assert.equal(await page.getAttribute('html','data-te-project'),'native');assert.equal(await stored(page),null,'Context must have fresh project storage');
         row.phase='prepare cyan custom state';await open(page,row);await page.selectOption('[name="preset"]','cyan');await close(page,row);await pause(25);
-        const before=await stored(page);assert.equal(before.preset,'cyan');await open(page,row);
+        const before=await stored(page);assert.equal(before.preset,'cyan');
+        if(item.iteration%2===0) await page.locator('iframe').scrollIntoViewIfNeeded();
+        row.beforeOpen=await page.evaluate(resetHitTestInPage);await open(page,row);
         row.beforeReset=await page.evaluate(resetHitTestInPage);
-        assert.equal(row.beforeReset.dialog.modal,true);assert.equal(row.beforeReset.iframes[0].style.pointerEvents,'none');
+        assert.equal(row.beforeReset.dialog.modal,false);assert.equal(row.beforeReset.iframes[0].style.pointerEvents,'auto');
         const point=row.beforeReset.reset.point,frameRect=row.beforeReset.iframes[0].rect;
         row.resetOverlapsFrame=point.x>=frameRect.x&&point.x<=frameRect.right&&point.y>=frameRect.y&&point.y<=frameRect.bottom;
-        assert.equal(row.resetOverlapsFrame,true,'Sampler must exercise the Reset point overlapping the underlying iframe');
+        assert.equal(row.resetOverlapsFrame,false,'In-flow editor must not overlap the embedded surface');
+        assert.ok(row.beforeReset.dialog.rect.bottom < frameRect.y, 'Whole editor must precede video');
         if(item.mode==='rendered') {
-          row.phase='rendered modal barrier';row.modalTicks=await frames(page);
+          row.phase='rendered editor barrier';row.modalTicks={parent:await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(a=>requestAnimationFrame(b=>resolve([a,b])))))};
           row.modalScreenshot=`${row.id}-modal-rendered.png`;await page.locator('#tront-theme-editor').screenshot({path:path.join(output,row.modalScreenshot)});
           row.afterBarrier=await page.evaluate(resetHitTestInPage);
         }
@@ -175,7 +178,7 @@ async function main() {
         assert.deepEqual(await stored(page),before,'Undo restores exact custom state');assert.equal(await page.getAttribute('html','data-te-project'),'custom');
         assert.equal(await page.locator('[data-action="undo"]').evaluate(el=>el===document.activeElement),true,'Undo retains normal pointer focus');
         row.phase='Close';await close(page,row);await restoreFrame(page,row,'after-close');
-        row.phase='reopen and real Escape';await open(page,row);assert.deepEqual(await stored(page),before);assert.equal(await page.locator('iframe').evaluate(el=>getComputedStyle(el).pointerEvents),'none');
+        row.phase='reopen and real Escape';await open(page,row);assert.deepEqual(await stored(page),before);assert.equal(await page.locator('iframe').evaluate(el=>getComputedStyle(el).pointerEvents),'auto');
         await close(page,row,true);await restoreFrame(page,row,'after-escape');
         row.phase='reopen after Escape';await open(page,row);assert.deepEqual(await stored(page),before);await close(page,row);
         assert.deepEqual(await page.evaluate(()=>['tront-theme','tront-theme-gallery-v1','tront-previews-paused'].map(key=>localStorage.getItem(key))),['sentinel-legacy','sentinel-gallery','sentinel-paused']);
