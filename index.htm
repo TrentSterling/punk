@@ -1,6 +1,6 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-tront-theme-editor data-tront-theme-surface="project" data-te-project="native">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -363,6 +363,22 @@
         }
 
     </style>
+
+    <!-- PROJECT THEME START: pinned local editor, native page adapter -->
+    <link rel="stylesheet" href="/assets/css/tront-theme-editor.css">
+    <link rel="stylesheet" href="/assets/css/tront-navbar.css">
+    <link rel="stylesheet" href="/assets/css/project-theme.css">
+    <script>window.TrontThemeProject = {"id":"punk","storageKey":"tront-theme-punk-v1","nativeLabel":"Original HackerPunk","original":{"mode":"dark","angle":135,"intensity":65,"frost":88,"pegs":[{"color":"#ff00ff","position":0},{"color":"#00ffff","position":33},{"color":"#ffff00","position":67},{"color":"#00dd00","position":100}]}};</script>
+    <script src="/assets/js/tront-system.js"></script>
+    <script src="/assets/js/tront-theme-editor.js"></script>
+    <script src="/assets/js/project-theme.js"></script>
+    <noscript><style>body { opacity: 1; visibility: visible; }</style></noscript>
+    <script>
+      document.addEventListener('DOMContentLoaded', function () {
+        setTimeout(function () { document.body.classList.add('fonts-loaded'); }, 2000);
+      });
+    </script>
+    <!-- PROJECT THEME END -->
 </head>
 <body>
 
@@ -373,14 +389,13 @@
         <div class="particle">SYS</div><div class="particle">()</div><div class="particle">???</div><div class="particle">|</div><div class="particle">//</div>
     </div>
 
-    <nav id="magic-navbar-container">
-        <!-- Elements are in REVERSE order for the CSS hover hack -->
-        <a href="https://tront.xyz/discord/" class="nav-link" target="_blank"><span>Discord</span></a>
-        <a href="https://blog.tront.xyz/" class="nav-link" target="_blank"><span>Blog</span></a>
-        <a href="https://tront.xyz/grid/" class="nav-link" target="_blank"><span>Grid</span></a>
-        <a href="#" class="nav-link active"><span>HackerPunk</span></a>
-        <a href="https://tront.xyz/" class="nav-link home-link" target="_blank">
-            <img src="https://blog.tront.xyz/assets/img/tront.png" alt="Tront Logo" class="logo-image">
+    <nav id="magic-navbar-container" aria-label="Main navigation">
+        <button id="tront-theme-btn" class="nav-link" type="button" hidden><span class="theme-icon" aria-hidden="true">◐</span><span class="theme-label">Theme</span></button>
+        <a href="https://tront.xyz/discord/" class="nav-link">Discord</a>
+        <a href="https://tront.xyz/blog/" class="nav-link">Blog</a>
+        <a href="https://tront.xyz/games/" class="nav-link">Games</a>
+        <a href="https://tront.xyz/" class="nav-link home-link">
+            <img src="https://tront.xyz/img/tront_small.jpg" alt="" class="logo-image">
             <span>Home</span>
         </a>
     </nav>

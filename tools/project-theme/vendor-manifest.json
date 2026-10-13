@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "upstreamRepository": "TrentSterling/trentsterling.github.io",
+  "upstreamCommit": "91d0a6874fbb4769d546574870e25c406a81608d",
+  "runtimeSourcing": "same-origin committed assets; no runtime upstream fetch",
+  "files": [
+    {
+      "path": "assets/js/tront-system.js",
+      "upstreamGitBlob": "fd835c85a2d4c4f0ee779023d9f6cb0c80348ec9",
+      "upstreamSha256": "bc226ce78fbd6267b47038554c31dae34c7652d9d7fb5901544867f51485ae6d",
+      "shippedGitBlob": "fd835c85a2d4c4f0ee779023d9f6cb0c80348ec9",
+      "shippedSha256": "bc226ce78fbd6267b47038554c31dae34c7652d9d7fb5901544867f51485ae6d",
+      "modified": false
+    },
+    {
+      "path": "assets/js/tront-theme-editor.js",
+      "upstreamGitBlob": "1d2bd90bbdd0dd9b8f29edfd0cc4523e0ff70afe",
+      "upstreamSha256": "4619b009a00b25085ceed94c4a25c806e1073a6f36dd53be8a8eb49b01cd5ae8",
+      "shippedGitBlob": "1b4b00bdb9c5c9766b0bc77159acd01f1a0ab37e",
+      "shippedSha256": "65076382a13f156a4bce91f8f0361b95db84fc27721c965093a24d957850108b",
+      "modified": true
+    },
+    {
+      "path": "assets/css/tront-theme-editor.css",
+      "upstreamGitBlob": "a17241890ccc42b0f94f24c28ba7a41973e110a7",
+      "upstreamSha256": "3ede7609c72dbdcf09769c28b7e5a40a3e198be5bdf26d7eb7e7fda73d3840fe",
+      "shippedGitBlob": "771510c36c0cc322cc7ef0d1b99b718eedb42959",
+      "shippedSha256": "6f904f09386aef31ffab190200a6eb78a00aab57c681c3092cecc377c826c6f5",
+      "modified": true
+    },
+    {
+      "path": "assets/css/tront-navbar.css",
+      "upstreamGitBlob": "4ce4315939fdc2b16cbdf8664413311cb9b0432e",
+      "upstreamSha256": "4f4b34bea4ac0c74959c9873bdf8f25b65ddb3b0ef148003d46f3e9e6bca8550",
+      "shippedGitBlob": "4ce4315939fdc2b16cbdf8664413311cb9b0432e",
+      "shippedSha256": "4f4b34bea4ac0c74959c9873bdf8f25b65ddb3b0ef148003d46f3e9e6bca8550",
+      "modified": false
+    }
+  ],
+  "testBasis": {
+    "path": "tools/theme-editor/test.cjs",
+    "gitBlob": "03604657134dba7cd4c79e0f022aa755f4ab124c",
+    "sha256": "39530d278e42f5ee4d6f51fdd26635d35945fb95bbbe168d80476c757a4baeac"
+  }
+}
