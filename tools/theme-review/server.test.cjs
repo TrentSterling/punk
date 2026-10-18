@@ -39,3 +39,22 @@ test('source normalization permits only root opt-in, one head block and the navb
   assert.notEqual(stripAllowed(before),stripAllowed(after.replace('<body>','<body data-te-project="native">')));
   assert.notEqual(stripAllowed(before),stripAllowed(after.replace('keep','changed')));
 });
+
+const {punkCanonical,stripCanonical,sha}=require('./source.cjs');
+test('Punk self-canonical preserves every other released page byte and the existing identity',()=>{
+  const root=path.resolve(__dirname,'../..'), html=fs.readFileSync(path.join(root,'index.htm'),'utf8');
+  assert.equal((html.match(/<link\b[^>]*\brel=["']canonical["'][^>]*>/gi)||[]).length,1);
+  assert.ok(html.match(/<head>[\s\S]*?<\/head>/)[0].includes(punkCanonical));
+  assert.equal(fs.readFileSync(path.join(root,'CNAME'),'utf8').trim(),'punk.tront.xyz');
+  assert.ok(html.includes('<meta property="og:url" content="https://punk.tront.xyz">'));
+  assert.equal(sha(stripCanonical(html,'punk')),'2f82d197b3c5e1d151c4d2e28f22a4a96f276d7d400ec5913b4d729491ebc526');
+});
+test('canonical normalization is literal, head-only, project-only and cannot conceal other edits',()=>{
+  const before='<html><head>\n<title>Keep</title>\n</head><body>Original copy</body></html>';
+  const after=before.replace('</head>',punkCanonical+'</head>');
+  assert.equal(stripCanonical(after,'punk'),before);
+  assert.equal(stripCanonical(before,'punk'),before);
+  assert.equal(stripCanonical(after,'monke'),after);
+  assert.equal(stripCanonical(stripCanonical(after,'punk'),'punk'),before);
+  for(const changed of [after.replace(punkCanonical,punkCanonical+punkCanonical),after.replace('https://punk.tront.xyz/','https://tront.xyz/'),after.replace('Original copy','Changed copy'),before.replace('</body>',punkCanonical+'</body>')]) assert.notEqual(stripCanonical(changed,'punk'),before);
+});

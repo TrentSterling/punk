@@ -15,7 +15,15 @@ function gitText(root, args) {return git(root,args).toString('utf8');}
 function sha(value) {return crypto.createHash('sha256').update(value).digest('hex');}
 const headBlock = /\n[ \t]*<!-- PROJECT THEME START: pinned local editor, native page adapter -->[\s\S]*?<!-- PROJECT THEME END -->\r?\n/;
 const navBlock = /<nav\b[^>]*\bid=["']magic-navbar-container["'][^>]*>[\s\S]*?<\/nav>/;
-function stripAllowed(html) {
+const punkCanonical = '    <link rel="canonical" href="https://punk.tront.xyz/">\n';
+function stripCanonical(html, project) {
+  if (project !== 'punk') return html;
+  // Only the reviewed literal inside head may be removed; duplicates, wrong
+  // targets and body placement remain visible to the exact source comparison.
+  return html.replace(/<head>[\s\S]*?<\/head>/, head => head.replace(punkCanonical, ''));
+}
+function stripAllowed(html, project) {
+  html = stripCanonical(html, project);
   return html.replace(headBlock, '').replace(navBlock,'<nav data-test-allowed-replacement></nav>').replace(/<html\b[^>]*>/,tag=>tag.replace(/\sdata-tront-theme-editor(?:="[^"]*")?/g,'').replace(/\sdata-tront-theme-surface="project"/g,'').replace(/\sdata-te-project="native"/g,''));
 }
 function blocks(html, name) {return [...html.matchAll(new RegExp(`<${name}\\b[^>]*>[\\s\\S]*?<\\/${name}>`, 'gi'))].map(match => match[0]);}
@@ -29,7 +37,8 @@ function sourceCheck(options) {
   const original = gitText(baselineRoot,['show',`${baselineRef}:index.htm`]);
   const current = fs.readFileSync(path.join(root,'index.htm'),'utf8');
   check('exactly one allowed head injection', (current.match(/<!-- PROJECT THEME START:/g)||[]).length === 1 && headBlock.test(current));
-  check('page outside html opt-in, injected head and navbar is byte-identical',stripAllowed(current) === stripAllowed(original),{baselineSha256:sha(stripAllowed(original)),currentSha256:sha(stripAllowed(current))});
+  if (project === 'punk') check('one exact self-canonical in head matches the existing CNAME and social identity', (current.match(/<link\b[^>]*\brel=["']canonical["'][^>]*>/gi)||[]).length === 1 && (current.match(/<head>[\s\S]*?<\/head>/)?.[0]||'').includes(punkCanonical) && fs.readFileSync(path.join(root,'CNAME'),'utf8').trim() === 'punk.tront.xyz' && current.includes('<meta property="og:url" content="https://punk.tront.xyz">'));
+  check('page outside reviewed canonical, html opt-in, injected head and navbar is byte-identical',stripAllowed(current,project) === stripAllowed(original,project),{baselineSha256:sha(stripAllowed(original,project)),currentSha256:sha(stripAllowed(current,project))});
   const withoutInjection = current.replace(headBlock,'');
   for (const tag of ['style','script']) check(`original ${tag} blocks are byte-identical`,JSON.stringify(blocks(original,tag)) === JSON.stringify(blocks(withoutInjection,tag)));
   for (const tag of ['iframe','video','source','img']) {
@@ -56,4 +65,4 @@ if (require.main === module) {
   try {options=argumentsFor();fs.mkdirSync(options.output,{recursive:true});const {report}=sourceCheck(options);fs.writeFileSync(path.join(options.output,'source.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));process.exitCode=report.pass?0:1;}
   catch(error){if(options){fs.mkdirSync(options.output,{recursive:true});fs.writeFileSync(path.join(options.output,'source-error.json'),JSON.stringify({error:error.stack},null,2));}console.error(error.stack);process.exitCode=1;}
 }
-module.exports={BASES,argumentsFor,gitText,sha,stripAllowed,sourceCheck};
+module.exports={BASES,argumentsFor,gitText,sha,punkCanonical,stripCanonical,stripAllowed,sourceCheck};
