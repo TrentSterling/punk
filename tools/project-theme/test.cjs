@@ -582,6 +582,17 @@ test('project CSS excludes generic page recoloring but retains shared dialog/nav
     assert.doesNotMatch(editorSource, /setItem\(['"]tront-theme['"]|localStorage\.clear\(/);
 });
 
+test('native control color schemes are scoped to the editor and follow its current mode', () => {
+    const css = fs.readFileSync(path.join(base, 'assets/css/tront-theme-editor.css'), 'utf8');
+    const rules = [...css.matchAll(/([^{}]+)\{\s*color-scheme:\s*(dark|light);\s*\}/g)];
+    assert.equal(rules.length, 2);
+    for (const mode of ['dark', 'light']) {
+        const rule = rules.find(match => match[2] === mode);
+        assert.equal(rule[1].replace(/\/\*[\s\S]*?\*\//g, '').trim(),
+            `html[data-tront-theme-editor][data-te-mode="${mode}"] .te-dialog`);
+    }
+});
+
 test('the vendored color/math engine, shared navbar and core token/harmony algorithms stay unchanged', () => {
     const upstream = name => fs.readFileSync(path.join(__dirname, 'upstream', name), 'utf8');
     assert.equal(systemSource, upstream('assets/js/tront-system.js'));

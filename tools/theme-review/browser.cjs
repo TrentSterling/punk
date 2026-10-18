@@ -144,8 +144,8 @@ async function main(){
     if(!executablePath)throw Error('THEME_BROWSER_EXECUTABLE must point to CI Google Chrome with MP4 support');
     browser=await chromium.launch({executablePath,headless:true,args:['--no-sandbox','--autoplay-policy=no-user-gesture-required']});
     const externalCache=new Map();
-    async function contextFor(origin,width,{reducedMotion='no-preference',seed=true}={}){
-      const context=await browser.newContext({viewport:{width,height:900},deviceScaleFactor:1,reducedMotion,serviceWorkers:'block'});
+    async function contextFor(origin,width,{reducedMotion='no-preference',seed=true,colorScheme='light'}={}){
+      const context=await browser.newContext({viewport:{width,height:900},deviceScaleFactor:1,reducedMotion,colorScheme,serviceWorkers:'block'});
       if(seed)await context.addInitScript(()=>{if(!sessionStorage.getItem('qa-seeded')){localStorage.setItem('tront-theme','sentinel-legacy');localStorage.setItem('tront-theme-gallery-v1','sentinel-gallery');localStorage.setItem('tront-previews-paused','sentinel-paused');sessionStorage.setItem('qa-seeded','1');}});
       await context.route('**/*',async route=>{
         const request=route.request(),url=new URL(request.url());
@@ -262,6 +262,31 @@ async function main(){
         fs.writeFileSync(path.join(options.output,'overflow-320.json'),JSON.stringify(diagnostic,null,2)+'\n');
         return {baselineDocument:before.document,currentDocument:after.document,baselineBody:before.body,currentBody:after.body,baselineOverflowElements:before.rows.length,currentOverflowElements:after.rows.length};
       }finally{await bc.close();await cc.close();}
+    });
+    for(const colorScheme of ['light','dark'])await check(`editor native controls track their ink under system ${colorScheme}`,async()=>{
+      const context=await contextFor(current.origin,390,{colorScheme});
+      try{
+        const p=await load(context,current.origin),rows=[];
+        const nativeScheme=await p.evaluate(()=>getComputedStyle(document.documentElement).colorScheme);
+        await open(p);
+        const inspect=async label=>{
+          const row=await p.evaluate(()=>{
+            const html=document.documentElement,dialog=document.querySelector('#tront-theme-editor'),select=dialog.querySelector('[name="preset"]');
+            return {mode:html.getAttribute('data-te-mode'),project:html.getAttribute('data-te-project'),root:getComputedStyle(html).colorScheme,dialog:getComputedStyle(dialog).colorScheme,select:getComputedStyle(select).colorScheme,preset:select.value};
+          });
+          rows.push({label,...row});assert.equal(row.dialog,row.mode);assert.equal(row.select,row.mode);
+          if(row.project==='native')assert.equal(row.root,nativeScheme,'Native page keeps its original color scheme');
+        };
+        await inspect('first-open');
+        for(const preset of ['cyan','light','dark']){await p.selectOption('[name="preset"]',preset);await inspect(preset);}
+        for(const mode of ['light','dark']){await p.locator(`[name="mode"][value="${mode}"]`).check();await inspect('custom-'+mode);}
+        await p.locator('[data-action="reset"]').click();await inspect('reset');assert.equal(await stored(p),null);
+        await p.locator('[data-action="undo"]').click();await inspect('undo');assert.equal((await stored(p)).preset,'custom');
+        await p.selectOption('[name="preset"]','project-original');await inspect('original-option');
+        await close(p);await open(p);await inspect('reopen');await close(p);
+        await p.reload({waitUntil:'load'});await open(p);await inspect('reload');await close(p);
+        return rows;
+      }finally{await context.close();}
     });
     const context=await contextFor(current.origin,1440),page=await load(context,current.origin);diagnosticPage=page;
     await check('canonical nav visual order, five controls and exact destinations',async()=>{

@@ -25,7 +25,7 @@ jobs:
       - name: Read complete base for original composition and media checks
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: cad83d925ad2ef79b1efad4ad7da726f58535543
           path: .local/baseline
           persist-credentials: false
       - name: Set up Node
