@@ -2,7 +2,7 @@ name: Citylab v02 district rebuild
 on:
   push:
     branches: [main]
-    paths: ['citylab/refine-v02.py']
+    paths: ['citylab/finish-v02.py']
 permissions:
   contents: write
 concurrency:
@@ -17,10 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Integrate and refine reviewed source
-        run: |
-          python3 -c "from pathlib import Path; import subprocess; s=Path('citylab/citylab.js').read_text(); subprocess.run(['python3','citylab/upgrade-v02.py'],check=True) if \"const VERSION='0.1.1'\" in s else None"
-          python3 citylab/refine-v02.py
+      - name: Apply visual review corrections
+        run: python3 citylab/finish-v02.py
       - name: Install pinned browser and renderer
         run: |
           mkdir -p /tmp/citylab-deps
@@ -32,7 +30,7 @@ jobs:
           cp -r node_modules/three/build "$GITHUB_WORKSPACE/citylab/vendor/"
           cp -r node_modules/three/examples/jsm "$GITHUB_WORKSPACE/citylab/vendor/addons"
           cp node_modules/three/LICENSE "$GITHUB_WORKSPACE/citylab/vendor/THREE-LICENSE"
-      - name: Geometry and bounded single-frame browser checks
+      - name: Geometry and browser checks
         run: |
           node --check citylab/citylab.js
           node --check citylab/districts.js
@@ -45,8 +43,8 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add citylab/citylab.js citylab/districts.js citylab/index.html citylab/build_standalone.py citylab/HACKERPUNK-Citylab-v0.2.html
-          git commit -m 'Publish six Citylab districts and recessed detail surfaces after browser review'
+          git add citylab/citylab.js citylab/districts.js citylab/HACKERPUNK-Citylab-v0.2.html
+          git commit -m 'Fix city sky clipping and add facade relief after district visual review'
           git push origin HEAD:main
       - uses: actions/upload-artifact@v4
         if: always()
