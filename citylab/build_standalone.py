@@ -25,10 +25,10 @@ def collect(p):
 entry=collect(ROOT/'citylab.js')
 html=(ROOT/'index.html').read_text()
 html=re.sub(r'<script type="importmap">.*?</script>','<script type="importmap">'+json.dumps({'imports':imports})+'</script>',html,flags=re.S)
-html=html.replace('<script type="module" src="./citylab.js"></script>',f'<script type="module">import "{entry}";</script>')
+html=html.replace('<script type="module" src="./citylab.js?v=0.2.0"></script>',f'<script type="module">import "{entry}";</script>')
 html=html.replace('This hosted version needs access to cdn.jsdelivr.net. The downloadable build includes its dependencies.','This offline build includes its renderer; check that WebGL 2 is enabled.')
 license_text=(ROOT/'vendor/THREE-LICENSE').read_text()
 html=html.replace('</head>','<!-- Three.js license notice:\n'+license_text.replace('--','- -')+'\n-->\n</head>')
-out=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT/'HACKERPUNK-Citylab-v0.1.html'
+out=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT/'HACKERPUNK-Citylab-v0.2.html'
 out.write_text(html)
 print(f'Built {out}: {out.stat().st_size:,} bytes, {len(imports)} modules')

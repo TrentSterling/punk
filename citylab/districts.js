@@ -110,7 +110,10 @@ export function compileDistricts(api,data){
   function roofkit(x,z,w,d,y,r){
     const px=x-w*.26,pz=z-d*.23;shell(px,pz,Math.max(2.8,w*.22),Math.max(2.6,d*.18),y,.9+r()*1.5,'steel',.2,1,0,'dark');
     for(let i=0;i<2;i++){const xx=x+w*.23,zz=z+(i-.5)*3.2;
-      B.box(xx,y+.7,zz,2.4,1.4,2.3,'steel',true);flat(xx,zz,2.05,1.95,y+1.405,'black');
+      B.box(xx,y+.58,zz,2.4,1.16,2.3,'steel',true);
+      B.box(xx,y+1.28,zz-1.075,2.4,.24,.15,'steel',false,true);B.box(xx,y+1.28,zz+1.075,2.4,.24,.15,'steel',false,true);
+      B.box(xx-1.125,y+1.28,zz,.15,.24,2,'steel',false,true);B.box(xx+1.125,y+1.28,zz,.15,.24,2,'steel',false,true);
+      flat(xx,zz,2.1,2,y+1.22,'black');
       B.instance('cyl',xx,y+1.49,zz,.72,.12,.72,'panel',true);
       B.box(xx,y+1.58,zz,1.15,.08,.17,'dark',false,true,.6);B.box(xx,y+1.58,zz,.17,.08,1.15,'dark',false,true,.6);
     }
@@ -126,7 +129,10 @@ export function compileDistricts(api,data){
     B.box(x-w/2+.16,y,z,.32,.5,d-.64,mat,false,true);B.box(x+w/2-.16,y,z,.32,.5,d-.64,mat,false,true);
   }
   function plant(x,z,w,d,y){
-    B.box(x,y+.23,z,w,.46,d,'dark',true);flat(x,z,w-.24,d-.24,y+.47,'green');
+    B.box(x,y+.14,z,w,.28,d,'dark',true);
+    B.box(x,y+.37,z-d/2+.08,w,.18,.16,'dark',false,true);B.box(x,y+.37,z+d/2-.08,w,.18,.16,'dark',false,true);
+    B.box(x-w/2+.08,y+.37,z,.16,.18,d-.32,'dark',false,true);B.box(x+w/2-.08,y+.37,z,.16,.18,d-.32,'dark',false,true);
+    flat(x,z,w-.32,d-.32,y+.34,'green');
     const n=Math.max(1,Math.floor(w/1.6));for(let i=0;i<n;i++){const px=x-w/2+.8+i*(w-1.6)/Math.max(1,n-1);B.instance('sphere',px,y+.65,z,.7,.35,Math.min(.8,d*.48),'plant',true);}
   }
   function tree(x,z,y,r){
@@ -221,7 +227,10 @@ export function compileDistricts(api,data){
   function garden(b,r){
     const{x,z,w,d}=b,ww=w-18,dd=d*.5,xx=x,zz=z-d*.15,tiers=4,step=5.5;let tw=ww,td=dd,tz=zz;
     for(let k=0;k<tiers;k++){const base=.28+k*step,hh=step-.04;shell(xx,tz,tw,td,base,hh,'facIvory',1.8,1,0,'ceramic');plant(xx,tz+td/2-1.2,tw-4,1.6,base+hh+.04);for(const sx of[-1,1])plant(xx+sx*(tw/2-1.1),tz,1.4,Math.max(3,td-5),base+hh+.04);tw-=6;td-=4;tz-=1.6;}
-    const poolZ=z+d*.28;B.box(x,.5,poolZ,ww*.7,.45,6,'ceramic',true);flat(x,poolZ,ww*.7-1,5,.73,'water');
+    const poolZ=z+d*.28;const pw=ww*.7;B.box(x,.32,poolZ,pw,.08,6,'ceramic',true);
+    B.box(x,.55,poolZ-2.75,pw,.5,.5,'ceramic',true);B.box(x,.55,poolZ+2.75,pw,.5,.5,'ceramic',true);
+    B.box(x-pw/2+.25,.55,poolZ,.5,.5,5,'ceramic',true);B.box(x+pw/2-.25,.55,poolZ,.5,.5,5,'ceramic',true);
+    flat(x,poolZ,pw-1,5,.56,'water');
     for(const s of[-1,1]){plant(x+s*w*.31,poolZ,4,4,.28);tree(x+s*w*.31,poolZ,.7,r);}for(const s of[-1,1])B.beam(V(x+s*ww*.4,0.3,zz+dd/2+2),V(x+s*ww*.2,25,zz-dd*.25),.38,'ivory',true);
   }
   function upperBridge(l){
