@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   browser-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +31,7 @@ jobs:
             cd /tmp/citylab-deps
             npx playwright install --with-deps chromium
             cd "$GITHUB_WORKSPACE"
+            node --check citylab/citylab.js
             python3 -m http.server 8080 >/tmp/citylab-http.log 2>&1 &
             NODE_PATH=/tmp/citylab-deps/node_modules node citylab/qa.cjs
           fi
