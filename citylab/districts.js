@@ -49,10 +49,10 @@ float rectAA(vec2 p,vec2 halfSize,vec2 aa){vec2 e=smoothstep(halfSize-aa,halfSiz
 vec2 cell=fract(fUV),idx=floor(fUV),fw=max(fwidth(fUV),vec2(.0004));
 float seed=fh(idx+floor(fP.xz*.012));
 float opening=rectAA(cell-.5,vec2(${type===1?'.46,.43':type===2?'.30,.24':type===3?'.37,.30':'.32,.29'}),fw);
-float rim=rectAA(cell-.5,vec2(${type===1?'.485,.46':type===2?'.34,.28':type===3?'.415,.345':'.375,.34'}),fw);
+float rim=rectAA(cell-.5,vec2(${type===1?'.485,.46':type===2?'.34,.28':type===3?'.415,.345':'.345,.315'}),fw);
 vec3 outer=diffuseColor.rgb;
 float seam=smoothstep(.015,.015+max(fw.x,fw.y),min(min(cell.x,1.-cell.x),min(cell.y,1.-cell.y)));
-outer*=mix(.60,1.,seam);
+outer*=mix(.87,1.,seam);
 outer*=.92+.08*fh(idx*1.13);
 vec3 view=normalize(cameraPosition-fP),N=normalize(fN),T=normalize(cross(vec3(0,1,0),N));
 vec2 aperture=vec2(${type===1?'.46,.43':type===2?'.30,.24':type===3?'.37,.30':'.32,.29'});
@@ -62,14 +62,14 @@ vec3 ts=(sign(rd)-ro)/(rd+vec3(.00001));
 float dist=min(ts.x,min(ts.y,ts.z));vec3 room=ro+rd*max(dist,0.);
 float floorLight=mix(.40,1.,smoothstep(-1.,.8,room.y));
 float back=step(.99,abs(room.z));float furnishing=step(.5,room.y+1.)*step(room.y,-.1)*step(abs(room.x),.47);
-vec3 interior=mix(vec3(.026,.055,.065),vec3(.36,.245,.12),step(.79,seed));
+vec3 interior=mix(vec3(.026,.055,.065),vec3(.36,.245,.12),step(.87,seed));
 interior*=floorLight*mix(.68,1.,back);interior*=1.-furnishing*.32;
 float reflection=pow(1.-max(0.,dot(view,N)),3.);
 interior=mix(interior,vec3(.22,.36,.43),.18+reflection*.4);
 diffuseColor.rgb=mix(outer,vec3(.035,.045,.049),rim);diffuseColor.rgb=mix(diffuseColor.rgb,interior,opening);
 float farBlend=clamp(max(fw.x,fw.y)-.38,0.,1.);diffuseColor.rgb=mix(diffuseColor.rgb,mix(outer,vec3(.10,.16,.18),.55),farBlend);
 `);
-    s.fragmentShader=s.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=vec3(.46,.24,.08)*opening*step(.79,seed)*.35;');
+    s.fragmentShader=s.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance+=vec3(.16,.08,.025)*opening*step(.87,seed)*.35;');
   };m.customProgramCacheKey=()=>`district-facade-${type}`;return m;
 }
 export function addDistrictMaterials(mats,surface){
@@ -91,13 +91,25 @@ export function compileDistricts(api,data){
     const tri=(a,b,c,ua,ub,uc)=>{positions.push(...a,...b,...c);uvs.push(...ua,...ub,...uc);};
     for(let i=0;i<p.length;i++){
       const j=(i+1)%p.length,[ax,az]=p[i],[bx,bz]=p[j],[atx,atz]=top[i],[btx,btz]=top[j];
-      const len=Math.hypot(bx-ax,bz-az),bay=Math.max(1,Math.round(len/(mat==='facGlass'?2.6:3.1))),floors=h/3.3;
+      const len=Math.hypot(bx-ax,bz-az),bay=Math.max(1,Math.round(len/(mat==='facGlass'?2.6:3.1))),floors=Math.max(1,Math.round(h/3.3));
       const a=[x+ax,base,z+az],b=[x+bx,base,z+bz],c=[x+btx,base+h,z+btz],d0=[x+atx,base+h,z+atz];
       tri(a,c,b,[0,0],[bay,floors],[bay,0]);tri(a,d0,c,[0,0],[0,floors],[bay,floors]);
     }
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.computeVertexNormals();addGeo(g,mat);
     const cap=new THREE.Shape();top.forEach(([a,b],i)=>i?cap.lineTo(a,b):cap.moveTo(a,b));cap.closePath();const cg=new THREE.ShapeGeometry(cap);cg.rotateX(-pi/2);cg.translate(x,base+h,z);addGeo(cg,roof);
     if(solid)indexCollider(new THREE.Box3(V(x-w/2,base,z-d/2),V(x+w/2,base+h,z+d/2)));
+    // Physical sill profiles and mullions outside the single owned facade.
+    if(solid && mat.startsWith('fac') && base<.6 && h>8){
+      const nr=Math.max(1,Math.round(h/3.3)),story=h/nr;
+      for(let i=0;i<p.length;i++){
+        const j=(i+1)%p.length,[ax,az]=p[i],[bx,bz]=p[j],len=Math.hypot(bx-ax,bz-az);if(len<4)continue;
+        const nx=(bz-az)/len,nz=-(bx-ax)/len;
+        const at=(u,y0,off=.18)=>{const t=(y0-base)/h,scale=1+(topScale-1)*t;return V(x+(ax+(bx-ax)*u)*scale+shift*t+nx*off,y0,z+(az+(bz-az)*u)*scale+nz*off);};
+        for(let row=1;row<nr;row++){const yy=base+row*story;B.beam(at(.025,yy),at(.975,yy),mat==='facGlass'?.09:.23,mat==='facGlass'?'steel':'concrete',true);}
+        const bays=Math.max(1,Math.round(len/(mat==='facGlass'?2.6:3.1)));
+        for(let k=1;k<bays;k+=mat==='facGlass'?1:2)B.beam(at(k/bays,base+.3,.10),at(k/bays,base+h-.3,.10),mat==='facGlass'?.075:.12,'steel',true);
+      }
+    }
     B.structures++;buildings.push({x,z,w,d,base,h,mat,topScale});return base+h;
   }
   function tank(x,z,r,h,base=.35){
@@ -204,6 +216,7 @@ export function compileDistricts(api,data){
     for(let k=0;k<segs;k++)for(const s of[-1,1]){B.box(xx,4+k*hh+hh*.47,zz+s*(dd/2+.28),ww-5,hh-.55,.4,k%2?'dark':'panel',false,true);B.box(xx,4+k*hh,zz+s*(dd/2+.55),ww-5,.13,.09,'cyan',false,true);B.box(xx+s*(ww/2+.25),4+k*hh+hh*.47,zz,.35,hh-.55,dd-5,'dark',false,true);}
     for(const s of[-1,1])for(let a=-ww*.33;a<ww*.36;a+=3.8)B.box(xx+a,h/2,zz+s*(dd/2+.64),.38,h-1,1,'steel',false,true);
     for(let i=0;i<3;i++){const px=x+w*.31,pz=z-d*.28+i*9;tank(px,pz,2.6,10+r()*3);pipe([px,6,pz],[xx+ww/2+.5,6,pz],.37,'copper');}
+    for(const side of[-1,1])for(let level=0;level<segs;level++)for(let f=0;f<6;f++)B.box(xx,5+level*hh+f*.45,zz+side*(dd/2+.72),ww-6,.12,.42,'steel',false,true);
     roofkit(xx,zz,ww*.8,dd*.8,y,r);const dish=new THREE.TorusGeometry(3.8,.22,6,24);dish.rotateX(.5);dish.translate(xx,y+5,zz);addGeo(dish,'light');B.beam(V(xx,y,zz),V(xx,y+5,zz),.45,'steel',true);
     B.box(x-w*.2,2,z+d*.28,9,3.4,5,'dark',true);sign('RELAY '+(b.j+1),xx,h*.63,zz+dd/2+1.25,ww*.74,3.8,0,'#88c1ca','RESTRICTED / NETWORK CORE');
   }
