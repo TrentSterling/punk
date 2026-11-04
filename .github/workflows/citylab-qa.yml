@@ -1,0 +1,42 @@
+name: HACKERPUNK Citylab QA
+on:
+  push:
+    branches: [main]
+    paths: ['citylab/**', '.github/workflows/citylab-qa.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned rendering dependency
+        run: |
+          mkdir -p /tmp/citylab-deps
+          cd /tmp/citylab-deps
+          npm init -y
+          npm install --ignore-scripts three@0.180.0 playwright@1.56.1
+          mkdir -p "$GITHUB_WORKSPACE/citylab/vendor"
+          cp -r node_modules/three/build "$GITHUB_WORKSPACE/citylab/vendor/"
+          cp -r node_modules/three/examples/jsm "$GITHUB_WORKSPACE/citylab/vendor/addons"
+          cp node_modules/three/LICENSE "$GITHUB_WORKSPACE/citylab/vendor/THREE-LICENSE"
+      - name: Browser verification
+        run: |
+          if [ -f citylab/qa.cjs ]; then
+            cd /tmp/citylab-deps
+            npx playwright install --with-deps chromium
+            cd "$GITHUB_WORKSPACE"
+            python3 -m http.server 8080 >/tmp/citylab-http.log 2>&1 &
+            NODE_PATH=/tmp/citylab-deps/node_modules node citylab/qa.cjs
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hackerpunk-citylab-tested-build
+          path: citylab/
+          retention-days: 14
